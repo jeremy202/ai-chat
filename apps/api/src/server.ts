@@ -38,13 +38,32 @@ const envSchema = z.object({
   API_URL: z.string().url().default("http://localhost:4000"),
 });
 
-const env = envSchema.parse(process.env);
-const pool = new pg.Pool({
-  connectionString: env.DATABASE_URL,
-});
-const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
-const app = express();
+export const env = envSchema.parse(process.env);
+
+const globalForPrisma = globalThis as typeof globalThis & {
+  __aiConciergePool?: pg.Pool;
+  __aiConciergePrisma?: PrismaClient;
+};
+
+const pool =
+  globalForPrisma.__aiConciergePool ??
+  new pg.Pool({
+    connectionString: env.DATABASE_URL,
+    max: 5,
+  });
+
+const prisma =
+  globalForPrisma.__aiConciergePrisma ??
+  new PrismaClient({
+    adapter: new PrismaPg(pool),
+  });
+
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.__aiConciergePool = pool;
+  globalForPrisma.__aiConciergePrisma = prisma;
+}
+
+export const app = express();
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },

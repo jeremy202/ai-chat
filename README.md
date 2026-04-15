@@ -530,22 +530,59 @@ if (hasLeadSignal(payload.message, signals)) {
 
 ## Deployment strategy
 
-### MVP deployment
+### Recommended MVP deployment: single Vercel project
 
-- **Frontend:** Vercel, Netlify, or Cloudflare Pages
-- **Backend:** Render, Railway, Fly.io, or a container platform
+- **Frontend:** Vercel static deployment from `apps/web/dist`
+- **Backend:** Vercel Node serverless function via `api/index.ts`
 - **Database:** Neon, Supabase Postgres, Railway Postgres, or managed Postgres
 - **Email:** Postmark, Resend SMTP, SendGrid, or SES SMTP
 
 ### Recommended production topology
 
 ```text
-Vite/Vue frontend CDN
-  -> Express API service
+Vercel project
+  -> static Vue/Vite frontend
+  -> /api Node serverless function
      -> PostgreSQL
      -> OpenAI API
      -> SMTP provider
 ```
+
+### Vercel configuration in this repo
+
+This repository now includes:
+
+- `vercel.json` to build the Vue app and route `/api/*` into the Node function
+- `api/index.ts` as the Vercel serverless entrypoint
+- an exported Express app in `apps/api/src/server.ts`
+- frontend API defaults that use same-origin `/api` in production
+
+### Vercel project settings
+
+Create one Vercel project pointed at the repository root and use:
+
+- **Framework preset:** Other
+- **Build command:** `npm run build:web`
+- **Output directory:** `apps/web/dist`
+- **Install command:** `npm install`
+
+### Vercel environment variables
+
+Set these in the Vercel dashboard:
+
+- `DATABASE_URL`
+- `JWT_SECRET`
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
+- `OPENAI_EMBEDDING_MODEL`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_USER`
+- `SMTP_PASS`
+- `SMTP_FROM`
+- `WEB_APP_URL` = your Vercel production URL, e.g. `https://ai-concierge-assistant.vercel.app`
+- `API_URL` = same as `WEB_APP_URL` for a single-project deployment
+- `VITE_API_URL` = leave empty for same-origin `/api`, or set explicitly if you split frontend/backend later
 
 ### Production hardening checklist
 
