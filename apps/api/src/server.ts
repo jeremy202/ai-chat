@@ -1627,7 +1627,9 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   });
 });
 
-const port = Number(process.env.PORT ?? 4000);
-app.listen(port, () => {
-  console.info(`AI Concierge API listening on http://localhost:${port}`);
-});
+if (process.env.VERCEL !== "1") {
+  const port = Number(process.env.PORT ?? 4000);
+  app.listen(port, () => {
+    console.info(`AI Concierge API listening on http://localhost:${port}`);
+  });
+}
