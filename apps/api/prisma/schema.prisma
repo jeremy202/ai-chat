@@ -1,0 +1,217 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  AGENT
+}
+
+enum KnowledgeSourceType {
+  FAQ
+  ROOM
+  POLICY
+  PRICING
+  SERVICE
+  FILE
+}
+
+enum ConversationChannel {
+  WIDGET
+  EMAIL
+}
+
+enum ConversationStatus {
+  OPEN
+  HUMAN
+  CLOSED
+}
+
+enum LeadStatus {
+  NEW
+  QUALIFIED
+  BOOKING_REQUESTED
+  BOOKED
+  LOST
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  ADMIN
+  SYSTEM
+}
+
+enum BookingStatus {
+  NEW
+  REVIEWING
+  CONTACTED
+  CONFIRMED
+  LOST
+}
+
+enum AnalyticsEventType {
+  CHAT_STARTED
+  LEAD_CAPTURED
+  BOOKING_REQUESTED
+  HUMAN_HANDOFF
+}
+
+model Business {
+  id               String           @id @default(cuid())
+  name             String
+  slug             String           @unique
+  email            String
+  websiteUrl       String?
+  marketSegment    String           @default("hospitality")
+  brandColor       String           @default("#0F766E")
+  timezone         String           @default("America/Toronto")
+  welcomeMessage   String           @default("Hi there! I'm your AI concierge. Ask about rooms, pricing, or availability.")
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  users            User[]
+  knowledgeItems   KnowledgeItem[]
+  knowledgeChunks  KnowledgeChunk[]
+  conversations    Conversation[]
+  messages         Message[]
+  bookings         Booking[]
+  analyticsEvents  AnalyticsEvent[]
+
+  @@index([slug])
+  @@map("businesses")
+}
+
+model User {
+  id              String         @id @default(cuid())
+  businessId      String
+  business        Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name            String
+  email           String         @unique
+  passwordHash    String
+  role            UserRole       @default(ADMIN)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  assignedConvos  Conversation[] @relation("ConversationAssignee")
+
+  @@index([businessId])
+  @@map("users")
+}
+
+model KnowledgeItem {
+  id          String              @id @default(cuid())
+  businessId  String
+  business    Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  title       String
+  sourceType  KnowledgeSourceType
+  rawContent  String
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  chunks      KnowledgeChunk[]
+
+  @@index([businessId])
+  @@map("knowledge_base")
+}
+
+model KnowledgeChunk {
+  id              String         @id @default(cuid())
+  businessId      String
+  business        Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  knowledgeItemId String
+  knowledgeItem   KnowledgeItem  @relation(fields: [knowledgeItemId], references: [id], onDelete: Cascade)
+  sequence        Int
+  content         String
+  embedding       Json
+  metadata        Json?
+  createdAt       DateTime       @default(now())
+
+  @@index([businessId])
+  @@index([knowledgeItemId])
+  @@map("knowledge_chunks")
+}
+
+model Conversation {
+  id                    String              @id @default(cuid())
+  businessId            String
+  business              Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  visitorName           String?
+  visitorEmail          String?
+  visitorPhone          String?
+  channel               ConversationChannel @default(WIDGET)
+  status                ConversationStatus  @default(OPEN)
+  leadStatus            LeadStatus          @default(NEW)
+  summary               String?
+  lastCustomerMessageAt DateTime?
+  lastAssistantMessageAt DateTime?
+  assignedToId          String?
+  assignedTo            User?               @relation("ConversationAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  messages              Message[]
+  bookings              Booking[]
+  analyticsEvents       AnalyticsEvent[]
+
+  @@index([businessId])
+  @@index([assignedToId])
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  businessId     String
+  business       Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           MessageRole
+  content        String
+  metadata       Json?
+  createdAt      DateTime     @default(now())
+
+  @@index([businessId])
+  @@index([conversationId])
+  @@map("messages")
+}
+
+model Booking {
+  id             String        @id @default(cuid())
+  businessId     String
+  business       Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  conversationId String?
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  guestName      String?
+  email          String?
+  phone          String?
+  arrivalDate    DateTime?
+  departureDate  DateTime?
+  guests         Int?
+  roomType       String?
+  notes          String?
+  estimatedValue Float?
+  status         BookingStatus @default(NEW)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([businessId])
+  @@index([conversationId])
+  @@map("bookings")
+}
+
+model AnalyticsEvent {
+  id             String             @id @default(cuid())
+  businessId     String
+  business       Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  conversationId String?
+  conversation   Conversation?      @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  type           AnalyticsEventType
+  payload        Json?
+  createdAt      DateTime           @default(now())
+
+  @@index([businessId])
+  @@index([conversationId])
+  @@map("analytics")
+}
