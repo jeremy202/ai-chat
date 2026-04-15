@@ -2,8 +2,8 @@
 import { ArrowLeft, Building2, Globe, Lock, Mail, UserRound } from "lucide-vue-next";
 import { reactive, ref } from "vue";
 import { RouterLink, useRouter } from "vue-router";
-import { authApi } from "@/services/api";
-import { useAuthStore } from "@/stores/auth";
+import { authApi } from "../services/api";
+import { useAuthStore } from "../stores/auth";
 
 const router = useRouter();
 const auth = useAuthStore();

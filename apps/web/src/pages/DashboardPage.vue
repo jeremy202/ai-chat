@@ -22,8 +22,8 @@ import {
   type Conversation,
   type DashboardOverview,
   type KnowledgeItem,
-} from '@/services/api'
-import { useAuthStore } from '@/stores/auth'
+} from '../services/api'
+import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
 const auth = useAuthStore()

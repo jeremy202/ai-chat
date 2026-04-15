@@ -4,7 +4,7 @@ import {
   type AuthResponse,
   type AuthUser,
   type Business,
-} from "@/services/api";
+} from "../services/api";
 
 type AuthState = {
   token: string | null;

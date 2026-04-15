@@ -1,9 +1,9 @@
 import { createRouter, createWebHistory } from "vue-router";
-import DashboardPage from "@/pages/DashboardPage.vue";
-import HomePage from "@/pages/HomePage.vue";
-import LoginPage from "@/pages/LoginPage.vue";
-import SignupPage from "@/pages/SignupPage.vue";
-import WidgetEmbedPage from "@/pages/WidgetEmbedPage.vue";
+import DashboardPage from "./pages/DashboardPage.vue";
+import HomePage from "./pages/HomePage.vue";
+import LoginPage from "./pages/LoginPage.vue";
+import SignupPage from "./pages/SignupPage.vue";
+import WidgetEmbedPage from "./pages/WidgetEmbedPage.vue";
 
 const router = createRouter({
   history: createWebHistory(),

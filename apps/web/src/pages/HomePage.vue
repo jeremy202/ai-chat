@@ -10,7 +10,7 @@ import {
 } from "lucide-vue-next";
 import { computed } from "vue";
 import { RouterLink } from "vue-router";
-import { useAuthStore } from "@/stores/auth";
+import { useAuthStore } from "../stores/auth";
 
 const auth = useAuthStore();
 

@@ -163,14 +163,14 @@ Key fields:
 - `id`
 - `name`
 - `slug`
-- `type` (`hotel`, `airbnb_host`, `boutique_property`, `resort`, `other`)
-- `contactEmail`
+- `email`
 - `websiteUrl`
+- `marketSegment`
 - `brandColor`
 - `welcomeMessage`
-- `aiTone`
 - `timezone`
-- `widgetEnabled`
+- `createdAt`
+- `updatedAt`
 
 #### `users`
 
@@ -184,20 +184,31 @@ Key fields:
 
 - `email`
 - `passwordHash`
-- `role`
+- `role` (`OWNER`, `ADMIN`, `AGENT`)
 - `businessId`
 
 #### `knowledge_base`
 
-Chunks used for retrieval.
+Top-level uploaded knowledge documents used for retrieval.
 
 Key fields:
 
 - `title`
-- `category` (`faq`, `room`, `pricing`, `policy`, `amenity`, `local_info`, `other`)
+- `sourceType` (`FAQ`, `ROOM`, `POLICY`, `PRICING`, `SERVICE`, `FILE`)
+- `rawContent`
+- `businessId`
+
+#### `knowledge_chunks`
+
+Retrieval rows generated from knowledge uploads.
+
+Key fields:
+
+- `knowledgeItemId`
+- `sequence`
 - `content`
-- `source`
 - `embedding`
+- `metadata`
 - `businessId`
 
 #### `conversations`
@@ -206,12 +217,15 @@ Guest chat sessions.
 
 Key fields:
 
-- `channel` (`widget`, `dashboard`, `email`)
-- `status` (`open`, `handoff_requested`, `human_active`, `closed`)
-- `guestName`
-- `guestEmail`
-- `leadScore`
-- `bookingIntent`
+- `channel` (`WIDGET`, `EMAIL`)
+- `status` (`OPEN`, `HUMAN`, `CLOSED`)
+- `leadStatus` (`NEW`, `QUALIFIED`, `BOOKING_REQUESTED`, `BOOKED`, `LOST`)
+- `visitorName`
+- `visitorEmail`
+- `visitorPhone`
+- `assignedToId`
+- `lastCustomerMessageAt`
+- `lastAssistantMessageAt`
 - `businessId`
 
 #### `messages`
@@ -220,9 +234,10 @@ Messages within a conversation.
 
 Key fields:
 
-- `role` (`visitor`, `assistant`, `admin`, `system`)
+- `role` (`USER`, `ASSISTANT`, `ADMIN`, `SYSTEM`)
 - `content`
 - `metadata`
+- `businessId`
 - `conversationId`
 
 #### `bookings`
@@ -231,15 +246,16 @@ Captured booking requests/leads.
 
 Key fields:
 
-- `status` (`new`, `qualified`, `contacted`, `won`, `lost`)
+- `status` (`NEW`, `REVIEWING`, `CONTACTED`, `CONFIRMED`, `LOST`)
 - `guestName`
-- `guestEmail`
+- `email`
+- `phone`
 - `arrivalDate`
 - `departureDate`
-- `partySize`
-- `budgetNote`
-- `roomPreference`
-- `source`
+- `guests`
+- `roomType`
+- `notes`
+- `estimatedValue`
 - `conversationId`
 - `businessId`
 
@@ -249,9 +265,8 @@ Event-level metrics for reporting.
 
 Key fields:
 
-- `eventType`
-- `eventValue`
-- `metadata`
+- `type` (`CHAT_STARTED`, `LEAD_CAPTURED`, `BOOKING_REQUESTED`, `HUMAN_HANDOFF`)
+- `payload`
 - `businessId`
 - `conversationId`
 
@@ -260,14 +275,21 @@ Key fields:
 ```text
 businesses 1---* users
 businesses 1---* knowledge_base
+knowledge_base 1---* knowledge_chunks
 businesses 1---* conversations
+businesses 1---* messages
 businesses 1---* bookings
 businesses 1---* analytics
 conversations 1---* messages
 conversations 1---* bookings
+users 1---* conversations (assignee relation for human handoff)
 ```
 
 ## API endpoints
+
+### Health
+
+- `GET /api/health`
 
 ### Auth
 
@@ -275,31 +297,33 @@ conversations 1---* bookings
 - `POST /api/auth/login`
 - `GET /api/auth/me`
 
-### Dashboard / business
+### Admin dashboard
 
-- `GET /api/dashboard/summary`
-- `GET /api/business/profile`
-- `PATCH /api/business/profile`
-- `GET /api/business/embed`
+- `GET /api/admin/overview`
+- `GET /api/admin/widget`
+- `PUT /api/admin/settings`
 
 ### Knowledge base
 
-- `GET /api/knowledge-base`
-- `POST /api/knowledge-base`
+- `GET /api/admin/knowledge`
+- `POST /api/admin/knowledge`
+- `DELETE /api/admin/knowledge/:id`
 
 ### Conversations / inbox
 
-- `GET /api/conversations`
-- `POST /api/conversations/:id/handoff`
+- `GET /api/admin/conversations`
+- `POST /api/admin/conversations/:id/takeover`
+- `POST /api/admin/conversations/:id/messages`
 
 ### Bookings
 
-- `GET /api/bookings`
+- `GET /api/admin/bookings`
 
 ### Public widget endpoints
 
-- `GET /api/public/business/:slug`
-- `POST /api/public/chat`
+- `GET /api/widget/:slug/config`
+- `GET /api/widget/:slug/conversations/:conversationId`
+- `POST /api/widget/:slug/messages`
 
 ## Step-by-step implementation plan
 
@@ -351,25 +375,30 @@ conversations 1---* bookings
 From `apps/api/src/server.ts`:
 
 ```ts
-const completion = await openai.responses.create({
-  model: env.OPENAI_CHAT_MODEL,
-  input: [
+const completion = await openai.chat.completions.create({
+  model: env.OPENAI_MODEL,
+  temperature: 0.25,
+  messages: [
     {
       role: 'system',
       content: [
-        {
-          type: 'input_text',
-          text: `You are an AI concierge assistant for ${business.name}. Answer only using the approved business knowledge below. If the answer is unknown or policy-sensitive, say you will connect the guest to a human agent. Your goals are to increase qualified bookings, recommend relevant rooms/services, collect lead details, and stay warm, concise, and trustworthy for Canadian hospitality customers.\n\nApproved knowledge:\n${knowledgeContext}`,
-        },
-      ],
+        `You are an AI concierge for ${business.name}, a Canadian hospitality business.`,
+        'Only answer with information grounded in the provided knowledge snippets.',
+        'If the knowledge base does not contain the answer, say so clearly and offer to capture the guest\\'s dates, email, and preferences for a human follow-up.',
+        'Your goal is to increase bookings, qualify leads, and sound polished and trustworthy.',
+      ].join('\\n'),
     },
     ...history.map((message) => ({
-      role: message.role === 'assistant' ? 'assistant' : 'user',
-      content: [{ type: 'input_text', text: message.content }],
+      role: message.role === MessageRole.USER ? 'user' : 'assistant',
+      content: message.content,
     })),
     {
       role: 'user',
-      content: [{ type: 'input_text', text: body.message }],
+      content: [
+        `Knowledge snippets:\\n${knowledgeBlock}`,
+        `Visitor message:\\n${payload.message}`,
+        `Detected intent: ${intent}`,
+      ].join('\\n\\n'),
     },
   ],
 });
@@ -380,23 +409,29 @@ const completion = await openai.responses.create({
 ```ts
 const embeddingResult = await openai.embeddings.create({
   model: env.OPENAI_EMBEDDING_MODEL,
-  input: body.message,
+  input: payload.message,
 });
 
 const queryEmbedding = embeddingResult.data[0]?.embedding ?? [];
 
-const knowledgeEntries = await prisma.knowledgeBaseEntry.findMany({
+const knowledgeEntries = await prisma.knowledgeChunk.findMany({
   where: { businessId: business.id },
-  take: 50,
+  select: {
+    id: true,
+    content: true,
+    embedding: true,
+  },
 });
 
 const rankedKnowledge = knowledgeEntries
   .map((entry) => ({
-    entry,
-    score: cosineSimilarity(queryEmbedding, normalizeEmbedding(entry.embedding)),
+    id: entry.id,
+    content: entry.content,
+    score: cosineSimilarity(queryEmbedding, toEmbeddingArray(entry.embedding)),
   }))
   .sort((left, right) => right.score - left.score)
-  .slice(0, 4);
+  .filter((entry) => entry.score > 0.12)
+  .slice(0, 6);
 ```
 
 ### 3. Chat widget script
@@ -404,13 +439,16 @@ const rankedKnowledge = knowledgeEntries
 From `apps/web/public/widget.js`:
 
 ```js
+var businessSlug =
+  script.getAttribute('data-business') || script.dataset.business || 'demo-hospitality-business';
+
 const iframe = document.createElement('iframe');
-iframe.src = `${origin}/widget/${encodeURIComponent(slug)}`;
+iframe.src = baseUrl.replace(/\/$/, '') + '/widget/' + encodeURIComponent(businessSlug);
 iframe.title = 'AI Concierge Assistant';
-iframe.style.width = '380px';
-iframe.style.height = '620px';
+iframe.style.width = 'min(420px, calc(100vw - 32px))';
+iframe.style.height = 'min(720px, calc(100vh - 128px))';
 iframe.style.border = '0';
-iframe.style.borderRadius = '20px';
+iframe.style.borderRadius = '24px';
 iframe.style.boxShadow = '0 24px 80px rgba(15, 23, 42, 0.28)';
 iframe.style.display = 'none';
 ```
@@ -418,31 +456,36 @@ iframe.style.display = 'none';
 ### 4. Booking capture logic
 
 ```ts
-const extractedBooking = extractBookingSignals(body.message);
+const signals = extractBookingSignals(payload.message);
 
-if (
-  extractedBooking.guestName ||
-  extractedBooking.guestEmail ||
-  extractedBooking.arrivalDate ||
-  extractedBooking.departureDate
-) {
-  await prisma.booking.upsert({
-    where: {
-      businessId_conversationId_guestEmail: {
-        businessId: business.id,
-        conversationId: conversation.id,
-        guestEmail: extractedBooking.guestEmail || conversation.guestEmail || `guest-${conversation.id}@placeholder.local`,
-      },
+if (hasLeadSignal(payload.message, signals)) {
+  const booking = await prisma.booking.create({
+    data: {
+      businessId: business.id,
+      conversationId: conversation.id,
+      guestName: signals.guestName,
+      email: signals.email,
+      phone: signals.phone,
+      arrivalDate: signals.arrivalDate,
+      departureDate: signals.departureDate,
+      guests: signals.guests,
+      roomType: signals.roomType,
+      notes: payload.message,
+      estimatedValue: signals.estimatedValue,
+      status: BookingStatus.NEW,
     },
-    update: {
-      guestName: extractedBooking.guestName || conversation.guestName || 'Guest',
-      arrivalDate: extractedBooking.arrivalDate,
-      departureDate: extractedBooking.departureDate,
-      partySize: extractedBooking.partySize,
-      roomPreference: extractedBooking.roomPreference,
-      budgetNote: extractedBooking.budgetNote,
+  });
+
+  await prisma.conversation.update({
+    where: { id: conversation.id },
+    data: {
+      leadStatus: signals.arrivalDate || signals.departureDate
+        ? LeadStatus.BOOKING_REQUESTED
+        : LeadStatus.QUALIFIED,
+      visitorName: signals.guestName,
+      visitorEmail: signals.email,
+      visitorPhone: signals.phone,
     },
-    create: { ... }
   });
 }
 ```
@@ -522,14 +565,13 @@ Vite/Vue frontend CDN
 npm install
 cp .env.example .env
 npm run prisma:generate
-npm run dev
+npm run dev:api
 ```
 
-Run separately if preferred:
+In a second terminal, start the frontend:
 
 ```bash
 npm run dev:web
-npm run dev:api
 ```
 
 ## Notes on MVP vs scalability

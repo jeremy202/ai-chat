@@ -1,5 +1,6 @@
 import "dotenv/config";
 
+import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
 import cors from "cors";
 import express, { NextFunction, Request, Response } from "express";
@@ -15,9 +16,11 @@ import {
   ConversationStatus,
   LeadStatus,
   MessageRole,
+  Prisma,
   PrismaClient,
   UserRole,
 } from "@prisma/client";
+import pg from "pg";
 import { z } from "zod";
 
 const envSchema = z.object({
@@ -36,7 +39,11 @@ const envSchema = z.object({
 });
 
 const env = envSchema.parse(process.env);
-const prisma = new PrismaClient();
+const pool = new pg.Pool({
+  connectionString: env.DATABASE_URL,
+});
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
 const app = express();
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -244,6 +251,44 @@ function fallbackEmbedding(input: string) {
 
   const magnitude = Math.sqrt(vector.reduce((total, value) => total + value * value, 0)) || 1;
   return vector.map((value) => value / magnitude);
+}
+
+function toPrismaJsonEntry(value: unknown): Prisma.InputJsonValue | null {
+  if (value === null) {
+    return null;
+  }
+
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return value;
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .filter((entry) => entry !== undefined)
+      .map((entry) => toPrismaJsonEntry(entry)) as Prisma.InputJsonArray;
+  }
+
+  if (typeof value === "object") {
+    return toPrismaJsonObject(value as Record<string, unknown>);
+  }
+
+  return String(value);
+}
+
+function toPrismaJsonObject(value: Record<string, unknown>): Prisma.InputJsonObject {
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([key, entry]) =>
+      entry === undefined ? [] : [[key, toPrismaJsonEntry(entry)]],
+    ),
+  ) as Prisma.InputJsonObject;
+}
+
+function firstParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
 }
 
 async function embedText(text: string) {
@@ -462,7 +507,7 @@ async function trackEvent(
       businessId,
       type,
       conversationId,
-      payload,
+      payload: payload ? toPrismaJsonObject(payload) : undefined,
     },
   });
 }
@@ -841,10 +886,10 @@ app.post(
         knowledgeItemId: knowledgeItem.id,
         content: chunk,
         embedding: embeddings[index],
-        metadata: {
+        metadata: toPrismaJsonObject({
           sourceType: payload.sourceType,
           title: payload.title,
-        },
+        }),
         sequence: index,
       })),
     });
@@ -869,9 +914,16 @@ app.delete(
   requireAuth,
   asyncHandler(async (req, res) => {
     const { businessId } = req.auth!;
+    const knowledgeItemId = firstParam(req.params.id);
+
+    if (!knowledgeItemId) {
+      res.status(400).json({ error: "Knowledge item id is required." });
+      return;
+    }
+
     const existing = await prisma.knowledgeItem.findFirst({
       where: {
-        id: req.params.id,
+        id: knowledgeItemId,
         businessId,
       },
     });
@@ -916,10 +968,16 @@ app.post(
   asyncHandler(async (req, res) => {
     const { businessId, userId } = req.auth!;
     const payload = takeoverSchema.parse(req.body);
+    const conversationId = firstParam(req.params.id);
+
+    if (!conversationId) {
+      res.status(400).json({ error: "Conversation id is required." });
+      return;
+    }
 
     const conversation = await prisma.conversation.findFirst({
       where: {
-        id: req.params.id,
+        id: conversationId,
         businessId,
       },
     });
@@ -969,10 +1027,16 @@ app.post(
   asyncHandler(async (req, res) => {
     const { businessId, userId } = req.auth!;
     const payload = adminReplySchema.parse(req.body);
+    const conversationId = firstParam(req.params.id);
+
+    if (!conversationId) {
+      res.status(400).json({ error: "Conversation id is required." });
+      return;
+    }
 
     const conversation = await prisma.conversation.findFirst({
       where: {
-        id: req.params.id,
+        id: conversationId,
         businessId,
       },
     });
@@ -988,9 +1052,9 @@ app.post(
         conversationId: conversation.id,
         role: MessageRole.ADMIN,
         content: payload.content,
-        metadata: {
+        metadata: toPrismaJsonObject({
           authoredByUserId: userId,
-        },
+        }),
       },
     });
 
@@ -1082,8 +1146,14 @@ app.put(
 app.get(
   "/api/widget/:slug/config",
   asyncHandler(async (req, res) => {
+    const slug = firstParam(req.params.slug);
+    if (!slug) {
+      res.status(400).json({ error: "Business slug is required." });
+      return;
+    }
+
     const business = await prisma.business.findUnique({
-      where: { slug: req.params.slug },
+      where: { slug },
     });
 
     if (!business) {
@@ -1113,8 +1183,16 @@ app.get(
 app.get(
   "/api/widget/:slug/conversations/:conversationId",
   asyncHandler(async (req, res) => {
+    const slug = firstParam(req.params.slug);
+    const conversationId = firstParam(req.params.conversationId);
+
+    if (!slug || !conversationId) {
+      res.status(400).json({ error: "Business slug and conversation id are required." });
+      return;
+    }
+
     const business = await prisma.business.findUnique({
-      where: { slug: req.params.slug },
+      where: { slug },
     });
 
     if (!business) {
@@ -1124,7 +1202,7 @@ app.get(
 
     const conversation = await prisma.conversation.findFirst({
       where: {
-        id: req.params.conversationId,
+        id: conversationId,
         businessId: business.id,
       },
       include: {
@@ -1147,8 +1225,15 @@ app.post(
   "/api/widget/:slug/messages",
   asyncHandler(async (req, res) => {
     const payload = widgetMessageSchema.parse(req.body);
+    const slug = firstParam(req.params.slug);
+
+    if (!slug) {
+      res.status(400).json({ error: "Business slug is required." });
+      return;
+    }
+
     const business = await prisma.business.findUnique({
-      where: { slug: req.params.slug },
+      where: { slug },
     });
 
     if (!business) {
@@ -1186,9 +1271,9 @@ app.post(
         conversationId: conversation.id,
         role: MessageRole.USER,
         content: payload.message,
-        metadata: {
+        metadata: toPrismaJsonObject({
           intent: detectIntent(payload.message),
-        },
+        }),
       },
     });
 
@@ -1239,10 +1324,10 @@ app.post(
           conversationId: conversation.id,
           role: MessageRole.ASSISTANT,
           content: assistantMessageContent,
-          metadata: {
+          metadata: toPrismaJsonObject({
             intent: detectIntent(payload.message),
             snippetCount: snippets.length,
-          },
+          }),
         },
       });
     } else {
