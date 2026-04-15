@@ -11,6 +11,10 @@
     (script && (script.getAttribute('data-host') || script.getAttribute('data-base-url'))) ||
     (script && script.src && script.src.replace(/\/widget\.js.*$/, '')) ||
     window.location.origin;
+  var apiBase =
+    (script && script.getAttribute('data-api')) ||
+    (script && script.dataset && script.dataset.api) ||
+    baseUrl.replace(/\/$/, '') + '/api';
   var position =
     (script && script.getAttribute('data-position')) ||
     (script && script.dataset && script.dataset.position) ||
@@ -50,7 +54,12 @@
   var iframe = document.createElement('iframe');
   iframe.title = 'AI Concierge Assistant';
   iframe.allow = 'clipboard-write';
-  iframe.src = baseUrl.replace(/\/$/, '') + '/widget/' + encodeURIComponent(businessSlug);
+  iframe.src =
+    baseUrl.replace(/\/$/, '') +
+    '/widget/' +
+    encodeURIComponent(businessSlug) +
+    '?apiBase=' +
+    encodeURIComponent(apiBase.replace(/\/$/, ''));
 
   Object.assign(iframe.style, {
     position: 'fixed',
@@ -95,6 +104,15 @@
     }
   });
 
-  document.body.appendChild(launcher);
-  document.body.appendChild(iframe);
+  function mount() {
+    if (!document.body) return;
+    document.body.appendChild(launcher);
+    document.body.appendChild(iframe);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', mount, { once: true });
+  } else {
+    mount();
+  }
 })();

@@ -1,6 +1,14 @@
 import axios from "axios";
 
 function resolveApiBaseUrl() {
+  if (typeof window !== "undefined") {
+    const params = new URLSearchParams(window.location.search);
+    const widgetApiBase = params.get("apiBase")?.replace(/\/$/, "");
+    if (widgetApiBase) {
+      return widgetApiBase;
+    }
+  }
+
   const configured = import.meta.env.VITE_API_URL?.replace(/\/$/, "");
   if (configured) {
     return configured;
@@ -156,6 +164,18 @@ export const authApi = {
   },
   login(payload: { email: string; password: string }) {
     return client.post<AuthResponse>("/api/auth/login", payload);
+  },
+  firebaseSignup(payload: {
+    idToken: string;
+    businessName: string;
+    businessEmail: string;
+    websiteUrl?: string;
+    name: string;
+  }) {
+    return client.post<AuthResponse>("/api/auth/firebase/signup", payload);
+  },
+  firebaseLogin(payload: { idToken: string }) {
+    return client.post<AuthResponse>("/api/auth/firebase/login", payload);
   },
   me() {
     return client.get<{ user: AuthUser; business: Business }>("/api/auth/me");

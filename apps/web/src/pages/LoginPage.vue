@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ArrowLeft, Lock, Mail } from "lucide-vue-next";
+import { signInWithEmailAndPassword } from "firebase/auth";
 import { reactive, ref } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 import { authApi } from "../services/api";
+import { firebaseAuth } from "../services/firebase";
 import { useAuthStore } from "../stores/auth";
 
 const router = useRouter();
@@ -21,7 +23,9 @@ async function handleSubmit() {
   error.value = "";
 
   try {
-    const { data } = await authApi.login(form);
+    const credentials = await signInWithEmailAndPassword(firebaseAuth, form.email, form.password);
+    const idToken = await credentials.user.getIdToken();
+    const { data } = await authApi.firebaseLogin({ idToken });
     auth.setSession(data);
     await router.push("/dashboard");
   } catch (submissionError) {

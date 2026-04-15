@@ -4,6 +4,8 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
 import cors from "cors";
 import express, { NextFunction, Request, Response } from "express";
+import { cert, getApps, initializeApp } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 import helmet from "helmet";
 import jwt from "jsonwebtoken";
 import morgan from "morgan";
@@ -26,6 +28,9 @@ import { z } from "zod";
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   JWT_SECRET: z.string().min(16),
+  FIREBASE_PROJECT_ID: z.string().optional(),
+  FIREBASE_CLIENT_EMAIL: z.string().optional(),
+  FIREBASE_PRIVATE_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default("gpt-4.1-mini"),
   OPENAI_EMBEDDING_MODEL: z.string().default("text-embedding-3-small"),
@@ -39,6 +44,20 @@ const envSchema = z.object({
 });
 
 export const env = envSchema.parse(process.env);
+
+const firebaseAdminEnabled = Boolean(
+  env.FIREBASE_PROJECT_ID && env.FIREBASE_CLIENT_EMAIL && env.FIREBASE_PRIVATE_KEY,
+);
+
+if (firebaseAdminEnabled && getApps().length === 0) {
+  initializeApp({
+    credential: cert({
+      projectId: env.FIREBASE_PROJECT_ID,
+      clientEmail: env.FIREBASE_CLIENT_EMAIL,
+      privateKey: env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+    }),
+  });
+}
 
 const globalForPrisma = globalThis as typeof globalThis & {
   __aiConciergePool?: pg.Pool;
@@ -136,7 +155,38 @@ const requireAuth = asyncHandler(async (req, res, next) => {
     req.auth = payload;
     next();
   } catch {
-    res.status(401).json({ error: "Invalid token." });
+    if (!firebaseAdminEnabled) {
+      res.status(401).json({ error: "Invalid token." });
+      return;
+    }
+
+    try {
+      const decoded = await verifyFirebaseIdToken(token);
+      const email = decoded.email?.toLowerCase();
+
+      if (!email) {
+        res.status(401).json({ error: "Firebase token is missing email." });
+        return;
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { email },
+      });
+
+      if (!user) {
+        res.status(401).json({ error: "No workspace is linked to this Firebase account." });
+        return;
+      }
+
+      req.auth = {
+        userId: user.id,
+        businessId: user.businessId,
+        role: user.role,
+      };
+      next();
+    } catch {
+      res.status(401).json({ error: "Invalid token." });
+    }
   }
 });
 
@@ -152,6 +202,18 @@ const signupSchema = z.object({
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
+});
+
+const firebaseSignupSchema = z.object({
+  idToken: z.string().min(1),
+  businessName: z.string().min(2),
+  businessEmail: z.string().email(),
+  websiteUrl: z.string().url().optional().or(z.literal("")),
+  name: z.string().min(2),
+});
+
+const firebaseLoginSchema = z.object({
+  idToken: z.string().min(1),
 });
 
 const widgetMessageSchema = z.object({
@@ -219,6 +281,14 @@ async function uniqueBusinessSlug(name: string) {
 
 function signToken(user: AuthToken) {
   return jwt.sign(user, env.JWT_SECRET, { expiresIn: "7d" });
+}
+
+async function verifyFirebaseIdToken(idToken: string) {
+  if (!firebaseAdminEnabled) {
+    throw new Error("Firebase Admin SDK is not configured.");
+  }
+
+  return getAuth().verifyIdToken(idToken);
 }
 
 function toEmbeddingArray(value: unknown): number[] {
@@ -531,8 +601,38 @@ async function trackEvent(
   });
 }
 
-function formatWidgetSnippet(slug: string) {
-  return `<script src="${env.WEB_APP_URL}/widget.js" data-business="${slug}" data-host="${env.WEB_APP_URL}" data-api="${env.API_URL}"></script>`;
+function stripTrailingSlash(value: string) {
+  return value.replace(/\/+$/, "");
+}
+
+function isLocalhostUrl(value: string) {
+  return /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/i.test(stripTrailingSlash(value));
+}
+
+function resolveWidgetSnippetUrls(req: Request) {
+  const requestOrigin = req.get("origin");
+  const fallbackOrigin = req.get("x-forwarded-proto") && req.get("x-forwarded-host")
+    ? `${req.get("x-forwarded-proto")}://${req.get("x-forwarded-host")}`
+    : req.protocol && req.get("host")
+      ? `${req.protocol}://${req.get("host")}`
+      : undefined;
+
+  const preferredOrigin = requestOrigin ?? fallbackOrigin;
+  const useRequestOrigin = preferredOrigin ? !isLocalhostUrl(preferredOrigin) : false;
+
+  const appBaseUrl = useRequestOrigin
+    ? stripTrailingSlash(preferredOrigin!)
+    : stripTrailingSlash(env.WEB_APP_URL);
+
+  const apiBaseUrl = isLocalhostUrl(env.API_URL)
+    ? `${appBaseUrl}/api`
+    : stripTrailingSlash(env.API_URL);
+
+  return { appBaseUrl, apiBaseUrl };
+}
+
+function formatWidgetSnippet(slug: string, urls: { appBaseUrl: string; apiBaseUrl: string }) {
+  return `<script src="${urls.appBaseUrl}/widget.js" data-business="${slug}" data-host="${urls.appBaseUrl}" data-api="${urls.apiBaseUrl}"></script>`;
 }
 
 async function maybeUpsertBooking(options: {
@@ -647,6 +747,126 @@ app.get("/api/health", (_req, res) => {
     aiProvider: openai ? "openai" : "fallback-local",
   });
 });
+
+app.post(
+  "/api/auth/firebase/signup",
+  asyncHandler(async (req, res) => {
+    const payload = firebaseSignupSchema.parse(req.body);
+    const decoded = await verifyFirebaseIdToken(payload.idToken);
+    const email = decoded.email?.toLowerCase();
+
+    if (!email) {
+      res.status(400).json({ error: "Firebase account is missing an email." });
+      return;
+    }
+
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (existingUser) {
+      res.status(409).json({ error: "An account already exists for this Firebase email." });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(decoded.uid, 10);
+    const slug = await uniqueBusinessSlug(payload.businessName);
+    const business = await prisma.business.create({
+      data: {
+        name: payload.businessName,
+        slug,
+        email: payload.businessEmail.toLowerCase(),
+        websiteUrl: payload.websiteUrl || null,
+        users: {
+          create: {
+            name: payload.name,
+            email,
+            passwordHash,
+            role: UserRole.OWNER,
+          },
+        },
+      },
+      include: {
+        users: true,
+      },
+    });
+
+    const user = business.users[0];
+    const token = signToken({
+      userId: user.id,
+      businessId: business.id,
+      role: user.role,
+    });
+
+    res.status(201).json({
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+      business: {
+        id: business.id,
+        name: business.name,
+        slug: business.slug,
+        email: business.email,
+        websiteUrl: business.websiteUrl,
+        brandColor: business.brandColor,
+        welcomeMessage: business.welcomeMessage,
+      },
+    });
+  }),
+);
+
+app.post(
+  "/api/auth/firebase/login",
+  asyncHandler(async (req, res) => {
+    const payload = firebaseLoginSchema.parse(req.body);
+    const decoded = await verifyFirebaseIdToken(payload.idToken);
+    const email = decoded.email?.toLowerCase();
+
+    if (!email) {
+      res.status(400).json({ error: "Firebase account is missing an email." });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: { business: true },
+    });
+
+    if (!user) {
+      res.status(404).json({ error: "No workspace found for this Firebase account. Please sign up first." });
+      return;
+    }
+
+    const token = signToken({
+      userId: user.id,
+      businessId: user.businessId,
+      role: user.role,
+    });
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+      business: {
+        id: user.business.id,
+        name: user.business.name,
+        slug: user.business.slug,
+        email: user.business.email,
+        websiteUrl: user.business.websiteUrl,
+        brandColor: user.business.brandColor,
+        welcomeMessage: user.business.welcomeMessage,
+      },
+    });
+  }),
+);
 
 app.post(
   "/api/auth/signup",
@@ -1126,6 +1346,7 @@ app.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     const { businessId } = req.auth!;
+    const widgetUrls = resolveWidgetSnippetUrls(req);
     const business = await prisma.business.findUnique({
       where: { id: businessId },
     });
@@ -1137,7 +1358,7 @@ app.get(
 
     res.json({
       business,
-      widgetSnippet: formatWidgetSnippet(business.slug),
+      widgetSnippet: formatWidgetSnippet(business.slug, widgetUrls),
     });
   }),
 );

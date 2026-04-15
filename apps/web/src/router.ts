@@ -1,9 +1,13 @@
 import { createRouter, createWebHistory } from "vue-router";
-import DashboardPage from "./pages/DashboardPage.vue";
 import HomePage from "./pages/HomePage.vue";
 import LoginPage from "./pages/LoginPage.vue";
 import SignupPage from "./pages/SignupPage.vue";
 import WidgetEmbedPage from "./pages/WidgetEmbedPage.vue";
+import DashboardOverviewPage from "./pages/dashboard/OverviewPage.vue";
+import DashboardKnowledgePage from "./pages/dashboard/KnowledgePage.vue";
+import DashboardInboxPage from "./pages/dashboard/InboxPage.vue";
+import DashboardBookingsPage from "./pages/dashboard/BookingsPage.vue";
+import DashboardWidgetPage from "./pages/dashboard/WidgetPage.vue";
 
 const router = createRouter({
   history: createWebHistory(),
@@ -26,7 +30,31 @@ const router = createRouter({
     {
       path: "/dashboard",
       name: "dashboard",
-      component: DashboardPage,
+      component: DashboardOverviewPage,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: "/dashboard/knowledge",
+      name: "dashboard-knowledge",
+      component: DashboardKnowledgePage,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: "/dashboard/inbox",
+      name: "dashboard-inbox",
+      component: DashboardInboxPage,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: "/dashboard/bookings",
+      name: "dashboard-bookings",
+      component: DashboardBookingsPage,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: "/dashboard/widget",
+      name: "dashboard-widget",
+      component: DashboardWidgetPage,
       meta: { requiresAuth: true },
     },
     {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { Bot, LoaderCircle, Send, Sparkles } from 'lucide-vue-next'
+import { Bot, LoaderCircle, Send, Sparkles, X } from 'lucide-vue-next'
 import { widgetApi, type Conversation, type WidgetConfig } from '../services/api'
 
 type WidgetMessage = {
@@ -101,6 +101,12 @@ async function sendMessage() {
 onMounted(async () => {
   await loadConfig()
 })
+
+function closeWidget() {
+  if (window.parent && window.parent !== window) {
+    window.parent.postMessage({ type: 'AI_CONCIERGE_CLOSE_WIDGET' }, '*')
+  }
+}
 </script>
 
 <template>
@@ -124,6 +130,14 @@ onMounted(async () => {
               {{ config?.business.name ?? 'Hospitality Concierge' }}
             </h1>
           </div>
+          <button
+            type="button"
+            class="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-300 transition hover:bg-white/10 hover:text-white"
+            aria-label="Close chat"
+            @click="closeWidget"
+          >
+            <X class="h-4 w-4" />
+          </button>
         </div>
         <div class="mt-4 flex flex-wrap gap-2">
           <span class="inline-flex items-center gap-2 rounded-full bg-white/5 px-3 py-1 text-xs text-slate-300">

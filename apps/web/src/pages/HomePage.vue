@@ -2,9 +2,12 @@
 import {
   ArrowRight,
   Bot,
+  Check,
   ChartNoAxesCombined,
   ConciergeBell,
+  CreditCard,
   MessageSquareMore,
+  Rocket,
   ShieldCheck,
   Sparkles,
 } from "lucide-vue-next";
@@ -42,6 +45,36 @@ const features = [
     icon: ChartNoAxesCombined,
   },
 ];
+
+const pricingPlans = [
+  {
+    name: "Starter",
+    price: "$49",
+    period: "/month",
+    description: "For single-property operators proving ROI from web chat.",
+    cta: "Start Starter",
+    highlighted: false,
+    items: ["Up to 2,000 monthly messages", "1 business workspace", "Knowledge base + widget embed", "Basic inbox + booking captures"],
+  },
+  {
+    name: "Growth",
+    price: "$149",
+    period: "/month",
+    description: "For active boutique brands handling regular booking volume.",
+    cta: "Choose Growth",
+    highlighted: true,
+    items: ["Up to 10,000 monthly messages", "3 team seats + role controls", "Advanced analytics + lead scoring", "Priority handoff and response insights"],
+  },
+  {
+    name: "Scale",
+    price: "Custom",
+    period: "",
+    description: "For multi-property groups and high-volume hospitality teams.",
+    cta: "Talk to sales",
+    highlighted: false,
+    items: ["Unlimited properties/workspaces", "Custom SLA + onboarding", "Custom integrations", "Dedicated support channel"],
+  },
+];
 </script>
 
 <template>
@@ -50,7 +83,7 @@ const features = [
       <header class="glass-card flex items-center justify-between px-6 py-4">
         <div class="flex items-center gap-3">
           <div
-            class="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-500 to-cyan-500 text-white shadow-lg shadow-teal-500/25"
+            class="flex h-11 w-11 items-center justify-center rounded-2xl bg-linear-to-br from-teal-500 to-cyan-500 text-white shadow-lg shadow-teal-500/25"
           >
             <Sparkles class="h-5 w-5" />
           </div>
@@ -62,6 +95,17 @@ const features = [
               Hospitality AI for Canadian hotels, Airbnbs, and boutique stays
             </p>
           </div>
+        </div>
+        <div class="hidden items-center gap-2 lg:flex">
+          <a class="pill-button border border-transparent bg-transparent text-slate-600 hover:border-slate-200 hover:bg-white" href="#features">
+            Features
+          </a>
+          <a class="pill-button border border-transparent bg-transparent text-slate-600 hover:border-slate-200 hover:bg-white" href="#pricing">
+            Pricing
+          </a>
+          <a class="pill-button border border-transparent bg-transparent text-slate-600 hover:border-slate-200 hover:bg-white" href="#roi">
+            ROI
+          </a>
         </div>
         <div class="flex items-center gap-3">
           <RouterLink class="pill-button border border-slate-200 bg-white text-slate-700" to="/login">
@@ -132,7 +176,7 @@ const features = [
         </div>
 
         <div class="glass-card p-6">
-          <div class="rounded-[2rem] bg-slate-950 p-5 text-white">
+          <div class="rounded-4xl bg-slate-950 p-5 text-white">
             <div class="mb-4 flex items-center justify-between">
               <div class="flex items-center gap-3">
                 <div class="rounded-2xl bg-white/10 p-3">
@@ -182,7 +226,7 @@ const features = [
         </div>
       </section>
 
-      <section class="grid gap-6 lg:grid-cols-2">
+      <section id="features" class="grid gap-6 lg:grid-cols-2">
         <div class="glass-card p-8">
           <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Why this works</p>
           <div class="mt-6 grid gap-4 sm:grid-cols-2">
@@ -235,6 +279,157 @@ const features = [
           </div>
         </div>
       </section>
+
+      <section id="pricing" class="glass-card p-8 sm:p-10">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Pricing</p>
+            <h2 class="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
+              Pick a plan that matches your booking volume
+            </h2>
+            <p class="mt-3 max-w-2xl text-slate-600">
+              Start on Spark-like MVP pricing, then scale as your lead capture and conversion volume grows.
+            </p>
+          </div>
+          <RouterLink class="pill-button border border-slate-200 bg-white text-slate-700" :to="primaryLink">
+            <CreditCard class="mr-2 h-4 w-4" />
+            Start free setup
+          </RouterLink>
+        </div>
+
+        <div class="mt-8 grid gap-4 lg:grid-cols-3">
+          <article
+            v-for="plan in pricingPlans"
+            :key="plan.name"
+            class="rounded-[1.75rem] border p-6"
+            :class="
+              plan.highlighted
+                ? 'border-teal-300 bg-linear-to-b from-teal-50 to-white shadow-lg shadow-teal-500/10'
+                : 'border-slate-200 bg-white/80'
+            "
+          >
+            <p class="text-sm font-semibold uppercase tracking-[0.2em]" :class="plan.highlighted ? 'text-teal-700' : 'text-slate-500'">
+              {{ plan.name }}
+            </p>
+            <p class="mt-3 flex items-end gap-1">
+              <span class="text-4xl font-semibold tracking-tight text-slate-950">{{ plan.price }}</span>
+              <span class="pb-1 text-sm text-slate-500">{{ plan.period }}</span>
+            </p>
+            <p class="mt-3 text-sm leading-6 text-slate-600">{{ plan.description }}</p>
+
+            <ul class="mt-5 space-y-2">
+              <li v-for="item in plan.items" :key="item" class="flex items-start gap-2 text-sm text-slate-700">
+                <Check class="mt-0.5 h-4 w-4 shrink-0 text-teal-600" />
+                <span>{{ item }}</span>
+              </li>
+            </ul>
+
+            <RouterLink
+              class="pill-button mt-6 w-full justify-center"
+              :class="plan.highlighted ? 'bg-slate-900 text-white' : 'border border-slate-200 bg-white text-slate-700'"
+              :to="primaryLink"
+            >
+              {{ plan.cta }}
+            </RouterLink>
+          </article>
+        </div>
+      </section>
+
+      <section class="grid gap-6 lg:grid-cols-[1fr_1fr]">
+        <div class="glass-card p-8">
+          <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">How it works</p>
+          <div class="mt-5 space-y-4">
+            <div class="soft-panel flex gap-4 p-5">
+              <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-950 text-white">1</div>
+              <div>
+                <h3 class="text-lg font-semibold text-slate-950">Connect your property data</h3>
+                <p class="mt-1 text-sm text-slate-600">Upload room details, policies, and FAQs into the knowledge base.</p>
+              </div>
+            </div>
+            <div class="soft-panel flex gap-4 p-5">
+              <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-950 text-white">2</div>
+              <div>
+                <h3 class="text-lg font-semibold text-slate-950">Embed the concierge script</h3>
+                <p class="mt-1 text-sm text-slate-600">Paste one script tag on your site to launch the widget instantly.</p>
+              </div>
+            </div>
+            <div class="soft-panel flex gap-4 p-5">
+              <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-950 text-white">3</div>
+              <div>
+                <h3 class="text-lg font-semibold text-slate-950">Convert chats into bookings</h3>
+                <p class="mt-1 text-sm text-slate-600">Track leads, handoff moments, and booking intent in one dashboard.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="glass-card p-8">
+          <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Ready to launch?</p>
+          <h2 class="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
+            Turn your website into a 24/7 booking concierge
+          </h2>
+          <p class="mt-4 text-slate-600">
+            Start with the free setup flow, deploy your widget, and begin capturing high-intent leads today.
+          </p>
+          <div class="mt-7 flex flex-col gap-3 sm:flex-row">
+            <RouterLink class="pill-button bg-teal-600 text-white" :to="primaryLink">
+              <Rocket class="mr-2 h-4 w-4" />
+              Launch now
+            </RouterLink>
+            <a class="pill-button border border-slate-200 bg-white text-slate-700" href="#pricing">View plans</a>
+          </div>
+        </div>
+      </section>
+
+      <footer class="glass-card mt-2 px-6 py-8 sm:px-8">
+        <div class="grid gap-8 lg:grid-cols-[1.35fr_1fr_1fr_1fr]">
+          <div>
+            <div class="flex items-center gap-3">
+              <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-900 text-white">
+                <Sparkles class="h-4 w-4" />
+              </div>
+              <div>
+                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">AI Concierge Assistant</p>
+                <p class="text-sm text-slate-500">Hospitality conversion platform</p>
+              </div>
+            </div>
+            <p class="mt-4 max-w-md text-sm leading-6 text-slate-600">
+              Help hotels and boutique stays capture more bookings with AI chat, structured lead qualification, and seamless human handoff.
+            </p>
+          </div>
+
+          <div>
+            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Product</p>
+            <ul class="mt-4 space-y-2 text-sm text-slate-700">
+              <li><a class="hover:text-slate-900" href="#features">Features</a></li>
+              <li><a class="hover:text-slate-900" href="#pricing">Pricing</a></li>
+              <li><RouterLink class="hover:text-slate-900" to="/signup">Start free setup</RouterLink></li>
+            </ul>
+          </div>
+
+          <div>
+            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Company</p>
+            <ul class="mt-4 space-y-2 text-sm text-slate-700">
+              <li><a class="hover:text-slate-900" href="#roi">Why AI Concierge</a></li>
+              <li><RouterLink class="hover:text-slate-900" to="/login">Customer login</RouterLink></li>
+              <li><a class="hover:text-slate-900" href="mailto:sales@aiconciergeassistant.com">Contact sales</a></li>
+            </ul>
+          </div>
+
+          <div>
+            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Legal</p>
+            <ul class="mt-4 space-y-2 text-sm text-slate-700">
+              <li><a class="hover:text-slate-900" href="#">Privacy policy</a></li>
+              <li><a class="hover:text-slate-900" href="#">Terms of service</a></li>
+              <li><a class="hover:text-slate-900" href="#">Data processing</a></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="mt-8 border-t border-slate-200 pt-5 text-sm text-slate-500">
+          © {{ new Date().getFullYear() }} AI Concierge Assistant. All rights reserved.
+        </div>
+      </footer>
     </div>
   </div>
 </template>
