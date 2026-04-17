@@ -25,6 +25,12 @@ import {
 import pg from "pg";
 import { z } from "zod";
 
+const optionalUrlWithDefault = (fallback: string) =>
+  z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+    z.string().url().default(fallback),
+  );
+
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   JWT_SECRET: z.string().min(16),
@@ -46,8 +52,8 @@ const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().default("AI Concierge <noreply@aiconciergeassistant.com>"),
-  WEB_APP_URL: z.string().url().default("http://localhost:5173"),
-  API_URL: z.string().url().default("http://localhost:4000"),
+  WEB_APP_URL: optionalUrlWithDefault("http://localhost:5173"),
+  API_URL: optionalUrlWithDefault("http://localhost:4000"),
 });
 
 export const env = envSchema.parse(process.env);
