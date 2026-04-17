@@ -4,7 +4,7 @@ import { onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import DashboardFrame from "../../components/dashboard/DashboardFrame.vue";
 import { useDashboardOps } from "../../composables/useDashboardOps";
-import { adminApi, type ShiftEntry } from "../../services/api";
+import { adminApi, type EmployeeEntry, type ShiftEntry } from "../../services/api";
 import { useLocaleStore } from "../../stores/locale";
 
 const router = useRouter();
@@ -12,6 +12,7 @@ const dashboard = useDashboardOps();
 const locale = useLocaleStore();
 
 const shifts = ref<ShiftEntry[]>([]);
+const employees = ref<EmployeeEntry[]>([]);
 const isSaving = ref(false);
 const form = reactive({
   teamMember: "",
@@ -27,6 +28,15 @@ async function loadShifts() {
     shifts.value = data.shifts;
   } catch (error) {
     dashboard.error = error instanceof Error ? error.message : "Unable to load shifts.";
+  }
+}
+
+async function loadEmployees() {
+  try {
+    const { data } = await adminApi.getEmployees();
+    employees.value = data.employees.filter((employee) => employee.active);
+  } catch (error) {
+    dashboard.error = error instanceof Error ? error.message : "Unable to load employees.";
   }
 }
 
@@ -59,10 +69,19 @@ async function createShift() {
   }
 }
 
+function onTeamMemberChange() {
+  const selected = employees.value.find((employee) => employee.fullName === form.teamMember);
+  if (!selected) return;
+  const primaryRole = selected.roles[0];
+  if (primaryRole) {
+    form.role = primaryRole;
+  }
+}
+
 onMounted(async () => {
   const ok = await dashboard.initialize(router);
   if (!ok) return;
-  await loadShifts();
+  await Promise.all([loadShifts(), loadEmployees()]);
 });
 </script>
 
@@ -83,7 +102,16 @@ onMounted(async () => {
         <p class="text-sm text-slate-300">{{ locale.t("dashboard.shifts.helper") }}</p>
       </div>
       <div class="mt-4 grid gap-3 md:grid-cols-2">
-        <input v-model="form.teamMember" class="rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white" :placeholder="locale.t('dashboard.shifts.teamMember')" />
+        <select
+          v-model="form.teamMember"
+          class="rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white"
+          @change="onTeamMemberChange"
+        >
+          <option value="" disabled>{{ locale.t("dashboard.shifts.teamMember") }}</option>
+          <option v-for="employee in employees" :key="employee.id" :value="employee.fullName">
+            {{ employee.fullName }}
+          </option>
+        </select>
         <input v-model="form.role" class="rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white" :placeholder="locale.t('dashboard.shifts.role')" />
         <input v-model="form.start" type="datetime-local" class="rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white" />
         <input v-model="form.end" type="datetime-local" class="rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white" />

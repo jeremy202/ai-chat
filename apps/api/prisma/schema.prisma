@@ -82,11 +82,32 @@ model Business {
   bookings         Booking[]
   analyticsEvents  AnalyticsEvent[]
   shifts           Shift[]
+  employees        Employee[]
   automations      Automation[]
   regionalSettings RegionalSettings?
 
   @@index([slug])
   @@map("businesses")
+}
+
+model Employee {
+  id               String   @id @default(cuid())
+  businessId       String
+  business         Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  fullName         String
+  email            String?
+  phone            String?
+  roles            Json
+  availability     Json
+  maxHoursPerWeek  Int?
+  notes            String?
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([active])
+  @@map("employees")
 }
 
 model Shift {

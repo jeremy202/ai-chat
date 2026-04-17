@@ -28,6 +28,14 @@ const client = axios.create({
 });
 
 client.interceptors.request.use((config) => {
+  const requestUrl = String(config.url ?? "");
+  const isWidgetPublicRequest =
+    requestUrl.startsWith("/api/widget/") || requestUrl.startsWith("api/widget/");
+
+  if (isWidgetPublicRequest) {
+    return config;
+  }
+
   const token = localStorage.getItem("ai-concierge-token");
 
   if (token) {
@@ -160,6 +168,19 @@ export type ShiftEntry = {
   notes?: string;
 };
 
+export type EmployeeEntry = {
+  id: string;
+  fullName: string;
+  email?: string | null;
+  phone?: string | null;
+  roles: string[];
+  availability: string[];
+  maxHoursPerWeek?: number | null;
+  notes?: string | null;
+  active: boolean;
+  createdAt: string;
+};
+
 export type AutomationEntry = {
   id: string;
   title: string;
@@ -252,6 +273,32 @@ export const adminApi = {
   },
   createShift(payload: Omit<ShiftEntry, "id">) {
     return client.post<{ shift: ShiftEntry }>("/api/admin/shifts", payload);
+  },
+  autoAssignShift(payload: { role: string; start: string; end: string; notes?: string }) {
+    return client.post<{
+      shift: ShiftEntry;
+      assignment: {
+        employeeId: string;
+        employeeName: string;
+        confidence: number;
+        reason: string;
+      };
+    }>("/api/admin/shifts/auto-assign", payload);
+  },
+  getEmployees() {
+    return client.get<{ employees: EmployeeEntry[] }>("/api/admin/employees");
+  },
+  createEmployee(payload: {
+    fullName: string;
+    email?: string;
+    phone?: string;
+    roles: string[];
+    availability: string[];
+    maxHoursPerWeek?: number;
+    notes?: string;
+    active?: boolean;
+  }) {
+    return client.post<{ employee: EmployeeEntry }>("/api/admin/employees", payload);
   },
   getAutomations() {
     return client.get<{ automations: AutomationEntry[] }>("/api/admin/automations");

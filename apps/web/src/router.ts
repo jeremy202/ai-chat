@@ -10,6 +10,7 @@ import DashboardBookingsPage from "./pages/dashboard/BookingsPage.vue";
 import DashboardWidgetPage from "./pages/dashboard/WidgetPage.vue";
 import DashboardSupportAgentPage from "./pages/dashboard/SupportAgentPage.vue";
 import DashboardShiftsPage from "./pages/dashboard/ShiftsPage.vue";
+import DashboardEmployeesPage from "./pages/dashboard/EmployeesPage.vue";
 import DashboardInternalAssistantPage from "./pages/dashboard/InternalAssistantPage.vue";
 import DashboardAutomationsPage from "./pages/dashboard/AutomationsPage.vue";
 import DashboardReportsPage from "./pages/dashboard/ReportsPage.vue";
@@ -55,6 +56,12 @@ const router = createRouter({
       path: "/dashboard/shifts",
       name: "dashboard-shifts",
       component: DashboardShiftsPage,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: "/dashboard/employees",
+      name: "dashboard-employees",
+      component: DashboardEmployeesPage,
       meta: { requiresAuth: true },
     },
     {

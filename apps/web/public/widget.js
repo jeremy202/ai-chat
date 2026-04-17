@@ -2,6 +2,15 @@
   var existing = document.getElementById('ai-concierge-assistant-widget-launcher');
   if (existing) return;
 
+  function normalizeAbsoluteUrl(value, fallbackProtocol) {
+    if (!value) return '';
+    var trimmed = String(value).trim();
+    if (!trimmed) return '';
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    if (trimmed.indexOf('//') === 0) return (fallbackProtocol || window.location.protocol || 'https:') + trimmed;
+    return '';
+  }
+
   function resolveScriptTag() {
     if (document.currentScript) return document.currentScript;
     var scripts = document.getElementsByTagName('script');
@@ -21,14 +30,16 @@
     (script && (script.getAttribute('data-business') || script.getAttribute('data-business-slug'))) ||
     (script && script.dataset && (script.dataset.business || script.dataset.businessSlug)) ||
     'demo-hospitality-business';
-  var baseUrl =
+  var rawBaseUrl =
     (script && (script.getAttribute('data-host') || script.getAttribute('data-base-url'))) ||
     (script && script.src && (function () { try { return new URL(script.src).origin; } catch (_) { return script.src.replace(/\/widget\.js.*$/, ''); } })()) ||
     window.location.origin;
-  var apiBase =
+  var baseUrl = normalizeAbsoluteUrl(rawBaseUrl, window.location.protocol) || window.location.origin;
+  var rawApiBase =
     (script && script.getAttribute('data-api')) ||
     (script && script.dataset && script.dataset.api) ||
     baseUrl.replace(/\/$/, '') + '/api';
+  var apiBase = normalizeAbsoluteUrl(rawApiBase, window.location.protocol) || (baseUrl.replace(/\/$/, '') + '/api');
   var position =
     (script && script.getAttribute('data-position')) ||
     (script && script.dataset && script.dataset.position) ||

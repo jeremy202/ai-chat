@@ -80,3 +80,30 @@ a {
 .widget-scroll {
   scrollbar-width: thin;
 }
+
+/* Minimal, smooth transitions only */
+.page-fade-enter-active,
+.page-fade-leave-active {
+  transition: opacity 120ms linear;
+}
+
+.page-fade-enter-from,
+.page-fade-leave-to {
+  opacity: 0;
+}
+
+/* Keep content static to avoid visual discomfort */
+.content-stagger > * {
+  opacity: 1;
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-fade-enter-active,
+  .page-fade-leave-active,
+  .content-stagger > * {
+    animation: none !important;
+    transition: none !important;
+    opacity: 1 !important;
+  }
+}

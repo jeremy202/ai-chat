@@ -13,7 +13,7 @@ import {
   Sparkles,
   Users,
 } from "lucide-vue-next";
-import { computed } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useLocaleStore } from "../../stores/locale";
 
@@ -39,6 +39,7 @@ const navItems = [
   { labelKey: "dashboard.nav.overview", icon: Bot, to: "/dashboard" },
   { labelKey: "dashboard.nav.support", icon: LifeBuoy, to: "/dashboard/support-agent" },
   { labelKey: "dashboard.nav.shifts", icon: Users, to: "/dashboard/shifts" },
+  { labelKey: "dashboard.nav.employees", icon: Users, to: "/dashboard/employees" },
   { labelKey: "dashboard.nav.internal", icon: BookOpen, to: "/dashboard/internal-assistant" },
   { labelKey: "dashboard.nav.automations", icon: ClipboardList, to: "/dashboard/automations" },
   { labelKey: "dashboard.nav.reports", icon: CalendarDays, to: "/dashboard/reports" },
@@ -50,6 +51,73 @@ const navItems = [
 ];
 
 const activePath = computed(() => route.path);
+const visibleError = ref("");
+const visibleSuccess = ref("");
+let errorTimer: number | null = null;
+let successTimer: number | null = null;
+
+function clearErrorTimer() {
+  if (errorTimer !== null) {
+    window.clearTimeout(errorTimer);
+    errorTimer = null;
+  }
+}
+
+function clearSuccessTimer() {
+  if (successTimer !== null) {
+    window.clearTimeout(successTimer);
+    successTimer = null;
+  }
+}
+
+function dismissError() {
+  visibleError.value = "";
+  clearErrorTimer();
+}
+
+function dismissSuccess() {
+  visibleSuccess.value = "";
+  clearSuccessTimer();
+}
+
+watch(
+  () => props.error,
+  (next) => {
+    if (!next) {
+      dismissError();
+      return;
+    }
+    visibleError.value = next;
+    clearErrorTimer();
+    errorTimer = window.setTimeout(() => {
+      visibleError.value = "";
+      errorTimer = null;
+    }, 5500);
+  },
+  { immediate: true },
+);
+
+watch(
+  () => props.success,
+  (next) => {
+    if (!next) {
+      dismissSuccess();
+      return;
+    }
+    visibleSuccess.value = next;
+    clearSuccessTimer();
+    successTimer = window.setTimeout(() => {
+      visibleSuccess.value = "";
+      successTimer = null;
+    }, 4200);
+  },
+  { immediate: true },
+);
+
+onBeforeUnmount(() => {
+  clearErrorTimer();
+  clearSuccessTimer();
+});
 
 function onLocaleChange(event: Event) {
   const target = event.target as HTMLSelectElement;
@@ -61,7 +129,8 @@ function onLocaleChange(event: Event) {
 <template>
   <div class="min-h-screen bg-linear-to-b from-slate-950 via-slate-900 to-slate-950 text-slate-100">
     <div class="mx-auto grid max-w-[1600px] gap-6 px-4 py-6 lg:grid-cols-[270px_1fr] lg:px-6">
-      <aside class="rounded-3xl border border-white/10 bg-linear-to-b from-slate-900 to-slate-950 p-4 shadow-[0_30px_80px_-40px_rgba(8,47,73,0.65)] lg:sticky lg:top-6 lg:h-[calc(100vh-3rem)]">
+      <aside class="rounded-3xl border border-white/10 bg-linear-to-b from-slate-900 to-slate-950 p-4 shadow-[0_20px_50px_-40px_rgba(15,23,42,0.5)] lg:sticky lg:top-6 lg:h-[calc(100vh-3rem)] lg:overflow-hidden">
+        <div class="flex h-full min-h-0 flex-col">
         <div class="flex items-center gap-3 border-b border-white/10 pb-4">
           <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-500/20 text-teal-300">
             <Bot class="h-5 w-5" />
@@ -72,7 +141,7 @@ function onLocaleChange(event: Event) {
           </div>
         </div>
 
-        <nav class="mt-4 space-y-1.5">
+        <nav class="mt-4 flex-1 space-y-1.5 overflow-y-auto pr-1">
           <RouterLink
             v-for="item in navItems"
             :key="item.to"
@@ -125,21 +194,73 @@ function onLocaleChange(event: Event) {
             {{ locale.t("dashboard.actions.logout") }}
           </button>
         </div>
+        </div>
       </aside>
 
-      <main class="space-y-6">
-        <header class="rounded-3xl border border-white/10 bg-linear-to-br from-slate-900/90 to-slate-900/60 p-5 shadow-[0_24px_80px_-48px_rgba(45,212,191,0.55)] sm:p-6">
+      <main class="space-y-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto lg:pr-1">
+        <div class="pointer-events-none fixed right-4 top-4 z-90 flex w-full max-w-sm flex-col gap-3 sm:right-6 sm:top-6">
+          <Transition
+            enter-active-class="transition-opacity duration-120 ease-out"
+            enter-from-class="opacity-0"
+            enter-to-class="opacity-100"
+            leave-active-class="transition-opacity duration-120 ease-in"
+            leave-from-class="opacity-100"
+            leave-to-class="opacity-0"
+          >
+            <div
+              v-if="visibleError"
+              class="pointer-events-auto rounded-2xl border border-rose-300/20 bg-slate-900/95 px-4 py-3 shadow-[0_12px_30px_-20px_rgba(15,23,42,0.8)] backdrop-blur"
+            >
+              <div class="flex items-start gap-3">
+                <p class="flex-1 text-sm font-medium text-rose-200">
+                  {{ visibleError }}
+                </p>
+                <button
+                  type="button"
+                  class="rounded-md px-1 text-rose-200/80 transition hover:bg-white/10 hover:text-rose-100"
+                  aria-label="Dismiss notification"
+                  @click="dismissError"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          </Transition>
+
+          <Transition
+            enter-active-class="transition-opacity duration-120 ease-out"
+            enter-from-class="opacity-0"
+            enter-to-class="opacity-100"
+            leave-active-class="transition-opacity duration-120 ease-in"
+            leave-from-class="opacity-100"
+            leave-to-class="opacity-0"
+          >
+            <div
+              v-if="visibleSuccess"
+              class="pointer-events-auto rounded-2xl border border-emerald-300/20 bg-slate-900/95 px-4 py-3 shadow-[0_12px_30px_-20px_rgba(15,23,42,0.8)] backdrop-blur"
+            >
+              <div class="flex items-start gap-3">
+                <p class="flex-1 text-sm font-medium text-emerald-200">
+                  {{ visibleSuccess }}
+                </p>
+                <button
+                  type="button"
+                  class="rounded-md px-1 text-emerald-200/80 transition hover:bg-white/10 hover:text-emerald-100"
+                  aria-label="Dismiss notification"
+                  @click="dismissSuccess"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          </Transition>
+        </div>
+
+        <header class="rounded-3xl border border-white/10 bg-linear-to-br from-slate-900/90 to-slate-900/60 p-5 shadow-[0_16px_40px_-30px_rgba(15,23,42,0.65)] sm:p-6">
           <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ locale.t("dashboard.header") }}</p>
           <h1 class="mt-1 text-2xl font-semibold tracking-tight text-white">{{ title }}</h1>
           <p class="mt-1 text-sm text-slate-300">{{ subtitle }}</p>
         </header>
-
-        <div v-if="error" class="rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
-          {{ error }}
-        </div>
-        <div v-if="success" class="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-          {{ success }}
-        </div>
 
         <div v-if="loading" class="flex min-h-[260px] items-center justify-center rounded-3xl border border-white/10 bg-slate-900/70">
           <div class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200">
@@ -148,7 +269,7 @@ function onLocaleChange(event: Event) {
           </div>
         </div>
 
-        <div v-else>
+        <div v-else class="content-stagger">
           <slot />
         </div>
       </main>

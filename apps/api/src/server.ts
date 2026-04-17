@@ -290,6 +290,24 @@ const createShiftSchema = z.object({
   notes: z.string().optional(),
 });
 
+const createEmployeeSchema = z.object({
+  fullName: z.string().min(2),
+  email: z.string().email().optional().or(z.literal("")),
+  phone: z.string().optional(),
+  roles: z.array(z.string().min(1)).min(1),
+  availability: z.array(z.string().min(1)).default([]),
+  maxHoursPerWeek: z.coerce.number().int().positive().optional(),
+  notes: z.string().optional(),
+  active: z.boolean().default(true),
+});
+
+const autoAssignShiftSchema = z.object({
+  role: z.string().min(2),
+  start: z.string().datetime(),
+  end: z.string().datetime(),
+  notes: z.string().optional(),
+});
+
 const createAutomationSchema = z.object({
   title: z.string().min(2),
   type: z.enum(["INVOICE_REMINDER", "INVENTORY_CHECK", "FOLLOW_UP", "OTHER"]),
@@ -694,6 +712,26 @@ async function trackEvent(
 
 function stripTrailingSlash(value: string) {
   return value.replace(/\/+$/, "");
+}
+
+function toStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => String(item)).filter(Boolean);
+}
+
+function hasSchedulingConflict(
+  shift: { start: Date; end: Date },
+  targetStart: Date,
+  targetEnd: Date,
+) {
+  return shift.start < targetEnd && shift.end > targetStart;
+}
+
+function estimateAvailabilityScore(availability: string[], shiftStart: Date) {
+  if (availability.length === 0) return 0.35;
+  const day = shiftStart.toLocaleDateString("en-US", { weekday: "short" }).toLowerCase();
+  const matched = availability.some((slot) => slot.toLowerCase().includes(day));
+  return matched ? 1 : 0.4;
 }
 
 function isLocalhostUrl(value: string) {
@@ -1540,6 +1578,164 @@ app.post(
       priority: payload.priority,
       channel: payload.channel,
       groundingSnippetCount: snippets.length,
+    });
+  }),
+);
+
+app.get(
+  "/api/admin/employees",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.auth!;
+    const employees = await prisma.employee.findMany({
+      where: { businessId },
+      orderBy: { createdAt: "desc" },
+    });
+
+    res.json({
+      employees: employees.map((employee) => ({
+        ...employee,
+        roles: toStringArray(employee.roles),
+        availability: toStringArray(employee.availability),
+      })),
+    });
+  }),
+);
+
+app.post(
+  "/api/admin/employees",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.auth!;
+    const payload = createEmployeeSchema.parse(req.body);
+
+    const employee = await prisma.employee.create({
+      data: {
+        businessId,
+        fullName: payload.fullName,
+        email: payload.email || null,
+        phone: payload.phone || null,
+        roles: payload.roles,
+        availability: payload.availability,
+        maxHoursPerWeek: payload.maxHoursPerWeek,
+        notes: payload.notes,
+        active: payload.active,
+      },
+    });
+
+    res.status(201).json({
+      employee: {
+        ...employee,
+        roles: toStringArray(employee.roles),
+        availability: toStringArray(employee.availability),
+      },
+    });
+  }),
+);
+
+app.post(
+  "/api/admin/shifts/auto-assign",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.auth!;
+    const payload = autoAssignShiftSchema.parse(req.body);
+
+    const shiftStart = new Date(payload.start);
+    const shiftEnd = new Date(payload.end);
+    if (shiftEnd <= shiftStart) {
+      res.status(400).json({ error: "Shift end time must be after shift start time." });
+      return;
+    }
+
+    const employees = await prisma.employee.findMany({
+      where: { businessId, active: true },
+      orderBy: { createdAt: "asc" },
+    });
+
+    const matchingEmployees = employees.filter((employee) =>
+      toStringArray(employee.roles).some((role) => role.toLowerCase() === payload.role.toLowerCase()),
+    );
+
+    if (matchingEmployees.length === 0) {
+      res.status(404).json({
+        error: "No active employees found for this role. Add employee details first.",
+      });
+      return;
+    }
+
+    const recentShifts = await prisma.shift.findMany({
+      where: {
+        businessId,
+        start: {
+          gte: new Date(shiftStart.getTime() - 1000 * 60 * 60 * 24 * 7),
+        },
+      },
+    });
+
+    const recommendations = matchingEmployees
+      .map((employee) => {
+        const employeeShifts = recentShifts.filter((shift) => shift.teamMember === employee.fullName);
+        const hasConflict = employeeShifts.some((shift) =>
+          hasSchedulingConflict(shift, shiftStart, shiftEnd),
+        );
+        if (hasConflict) return null;
+
+        const assignedHoursLastWeek = employeeShifts.reduce((total, shift) => {
+          const shiftHours = (shift.end.getTime() - shift.start.getTime()) / (1000 * 60 * 60);
+          return total + Math.max(shiftHours, 0);
+        }, 0);
+
+        const availabilityScore = estimateAvailabilityScore(
+          toStringArray(employee.availability),
+          shiftStart,
+        );
+        const weeklyLoadScore = Math.max(0, 1 - assignedHoursLastWeek / 40);
+        const capScore = employee.maxHoursPerWeek
+          ? Math.max(0, 1 - assignedHoursLastWeek / employee.maxHoursPerWeek)
+          : 1;
+        const score = availabilityScore * 0.45 + weeklyLoadScore * 0.35 + capScore * 0.2;
+
+        return {
+          employee,
+          score,
+          availabilityScore,
+          weeklyLoadScore,
+          capScore,
+          assignedHoursLastWeek,
+        };
+      })
+      .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate))
+      .sort((a, b) => b.score - a.score);
+
+    const winner = recommendations[0];
+    if (!winner) {
+      res.status(409).json({
+        error: "No available employee without shift conflicts for the selected time.",
+      });
+      return;
+    }
+
+    const shift = await prisma.shift.create({
+      data: {
+        businessId,
+        teamMember: winner.employee.fullName,
+        role: payload.role,
+        start: shiftStart,
+        end: shiftEnd,
+        notes: payload.notes || `Auto-assigned by AI assistant.`,
+      },
+    });
+
+    res.status(201).json({
+      shift,
+      assignment: {
+        employeeId: winner.employee.id,
+        employeeName: winner.employee.fullName,
+        confidence: Number(winner.score.toFixed(2)),
+        reason: `Selected based on role match, current workload (${winner.assignedHoursLastWeek.toFixed(
+          1,
+        )}h in last 7 days), and availability fit.`,
+      },
     });
   }),
 );

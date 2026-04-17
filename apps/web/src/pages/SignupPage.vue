@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ArrowLeft, Building2, Globe, Lock, Mail, UserRound } from "lucide-vue-next";
-import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { reactive, ref } from "vue";
 import { RouterLink, useRouter } from "vue-router";
+import { AxiosError } from "axios";
 import { authApi } from "../services/api";
 import { firebaseAuth } from "../services/firebase";
 import { useAuthStore } from "../stores/auth";
@@ -24,21 +25,54 @@ const form = reactive({
 const isSubmitting = ref(false);
 const error = ref("");
 
+type FirebaseAuthError = Error & { code?: string };
+
 async function handleSubmit() {
   isSubmitting.value = true;
   error.value = "";
 
   try {
-    const credentials = await createUserWithEmailAndPassword(firebaseAuth, form.email, form.password);
+    let credentials;
+    try {
+      credentials = await createUserWithEmailAndPassword(firebaseAuth, form.email, form.password);
+      await updateProfile(credentials.user, { displayName: form.name });
+    } catch (firebaseError) {
+      const authError = firebaseError as FirebaseAuthError;
+      if (authError.code === "auth/email-already-in-use") {
+        // Recovery path: existing Firebase user but no app workspace yet.
+        credentials = await signInWithEmailAndPassword(firebaseAuth, form.email, form.password);
+      } else {
+        throw firebaseError;
+      }
+    }
+
+    if (!credentials) {
+      throw new Error("Unable to establish a Firebase session.");
+    }
+
     await updateProfile(credentials.user, { displayName: form.name });
-    const idToken = await credentials.user.getIdToken();
-    const { data } = await authApi.firebaseSignup({
-      idToken,
-      businessName: form.businessName,
-      businessEmail: form.businessEmail,
-      websiteUrl: form.websiteUrl,
-      name: form.name,
-    });
+    let data;
+    try {
+      const idToken = await credentials.user.getIdToken();
+      const signupResponse = await authApi.firebaseSignup({
+        idToken,
+        businessName: form.businessName,
+        businessEmail: form.businessEmail,
+        websiteUrl: form.websiteUrl,
+        name: form.name,
+      });
+      data = signupResponse.data;
+    } catch (apiError) {
+      const axiosError = apiError as AxiosError<{ error?: string }>;
+      if (axiosError.response?.status === 409) {
+        const idToken = await credentials.user.getIdToken(true);
+        const loginResponse = await authApi.firebaseLogin({ idToken });
+        data = loginResponse.data;
+      } else {
+        throw apiError;
+      }
+    }
+
     auth.setSession(data);
     await router.push("/dashboard");
   } catch (submissionError) {
