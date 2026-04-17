@@ -4,9 +4,11 @@ import { onMounted } from "vue";
 import { useRouter } from "vue-router";
 import DashboardFrame from "../../components/dashboard/DashboardFrame.vue";
 import { useDashboardOps } from "../../composables/useDashboardOps";
+import { useLocaleStore } from "../../stores/locale";
 
 const router = useRouter();
 const dashboard = useDashboardOps();
+const locale = useLocaleStore();
 
 onMounted(async () => {
   await dashboard.initialize(router);
@@ -15,8 +17,8 @@ onMounted(async () => {
 
 <template>
   <DashboardFrame
-    title="Knowledge Base"
-    subtitle="Upload and maintain the content your concierge uses to answer guests."
+    :title="locale.t('dashboard.knowledge.title')"
+    :subtitle="locale.t('dashboard.knowledge.subtitle')"
     :business-name="dashboard.business?.name ?? 'Dashboard'"
     :loading="dashboard.loading"
     :error="dashboard.error"
@@ -27,8 +29,8 @@ onMounted(async () => {
     <article class="rounded-2xl border border-white/10 bg-slate-900/70 p-6">
       <div class="flex items-start justify-between gap-4">
         <div>
-          <p class="text-sm text-slate-400">Knowledge base</p>
-          <h2 class="mt-1 text-xl font-semibold text-white">Index hospitality knowledge</h2>
+          <p class="text-sm text-slate-400">{{ locale.t("dashboard.knowledge.kicker") }}</p>
+          <h2 class="mt-1 text-xl font-semibold text-white">{{ locale.t("dashboard.knowledge.heading") }}</h2>
         </div>
         <BookOpen class="h-5 w-5 text-teal-300" />
       </div>
@@ -38,7 +40,7 @@ onMounted(async () => {
           <input
             v-model="dashboard.knowledgeForm.title"
             type="text"
-            placeholder="Dog-friendly suites and winter pricing"
+            :placeholder="locale.t('dashboard.knowledge.titlePlaceholder')"
             class="rounded-xl border border-white/10 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-teal-300"
           />
           <select
@@ -56,7 +58,7 @@ onMounted(async () => {
         <textarea
           v-model="dashboard.knowledgeForm.content"
           rows="8"
-          placeholder="Describe room categories, amenities, rates, cancellation rules, breakfast policy, pet policy, and booking notes."
+          :placeholder="locale.t('dashboard.knowledge.contentPlaceholder')"
           class="rounded-xl border border-white/10 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-teal-300"
         />
         <div class="flex justify-end">
@@ -67,7 +69,7 @@ onMounted(async () => {
           >
             <LoaderCircle v-if="dashboard.savingKnowledge" class="h-4 w-4 animate-spin" />
             <Sparkles v-else class="h-4 w-4" />
-            Index knowledge
+            {{ locale.t("dashboard.knowledge.indexButton") }}
           </button>
         </div>
       </form>
@@ -84,7 +86,7 @@ onMounted(async () => {
             <p class="text-sm font-semibold text-white">{{ item.title }}</p>
             <p class="mt-1 text-xs uppercase tracking-[0.2em] text-slate-400">{{ item.sourceType }}</p>
           </div>
-          <span class="rounded-full bg-teal-500/20 px-2.5 py-1 text-xs text-teal-300">{{ item._count.chunks }} chunks</span>
+          <span class="rounded-full bg-teal-500/20 px-2.5 py-1 text-xs text-teal-300">{{ item._count.chunks }} {{ locale.t("dashboard.knowledge.chunks") }}</span>
         </div>
         <p class="mt-2 text-sm text-slate-300">
           {{ item.rawContent.slice(0, 260) }}<span v-if="item.rawContent.length > 260">...</span>

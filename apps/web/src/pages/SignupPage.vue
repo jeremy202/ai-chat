@@ -6,9 +6,11 @@ import { RouterLink, useRouter } from "vue-router";
 import { authApi } from "../services/api";
 import { firebaseAuth } from "../services/firebase";
 import { useAuthStore } from "../stores/auth";
+import { useLocaleStore } from "../stores/locale";
 
 const router = useRouter();
 const auth = useAuthStore();
+const locale = useLocaleStore();
 
 const form = reactive({
   businessName: "",
@@ -46,6 +48,11 @@ async function handleSubmit() {
     isSubmitting.value = false;
   }
 }
+
+function onLocaleChange(event: Event) {
+  const target = event.target as HTMLSelectElement;
+  locale.applyLocale(target.value === "fr-CA" ? "fr-CA" : "en-CA");
+}
 </script>
 
 <template>
@@ -82,8 +89,14 @@ async function handleSubmit() {
 
       <section class="glass-card p-8 sm:p-10">
         <p class="text-sm font-semibold uppercase tracking-[0.25em] text-teal-700">Create workspace</p>
+        <div class="mt-3">
+          <select class="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700" :value="locale.locale" @change="onLocaleChange">
+            <option value="en-CA">{{ locale.t("locale.english") }}</option>
+            <option value="fr-CA">{{ locale.t("locale.french") }}</option>
+          </select>
+        </div>
         <h2 class="mt-4 text-3xl font-semibold tracking-tight text-slate-950">
-          Build your AI booking assistant
+          {{ locale.t("auth.createAccount") }}
         </h2>
         <form class="mt-8 grid gap-5 sm:grid-cols-2" @submit.prevent="handleSubmit">
           <label class="block sm:col-span-2">

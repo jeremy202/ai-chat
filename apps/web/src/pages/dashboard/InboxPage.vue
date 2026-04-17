@@ -4,9 +4,11 @@ import { onMounted } from "vue";
 import { useRouter } from "vue-router";
 import DashboardFrame from "../../components/dashboard/DashboardFrame.vue";
 import { useDashboardOps } from "../../composables/useDashboardOps";
+import { useLocaleStore } from "../../stores/locale";
 
 const router = useRouter();
 const dashboard = useDashboardOps();
+const locale = useLocaleStore();
 
 onMounted(async () => {
   await dashboard.initialize(router);
@@ -15,8 +17,8 @@ onMounted(async () => {
 
 <template>
   <DashboardFrame
-    title="Conversation Inbox"
-    subtitle="Review guest chats, hand off high-intent leads, and send human follow-ups."
+    :title="locale.t('dashboard.inbox.title')"
+    :subtitle="locale.t('dashboard.inbox.subtitle')"
     :business-name="dashboard.business?.name ?? 'Dashboard'"
     :loading="dashboard.loading"
     :error="dashboard.error"
@@ -27,8 +29,8 @@ onMounted(async () => {
     <article class="rounded-2xl border border-white/10 bg-slate-900/70 p-6">
       <div class="flex items-start justify-between gap-4">
         <div>
-          <p class="text-sm text-slate-400">Conversation inbox</p>
-          <h2 class="mt-1 text-xl font-semibold text-white">Handoff and transcripts</h2>
+          <p class="text-sm text-slate-400">{{ locale.t("dashboard.inbox.kicker") }}</p>
+          <h2 class="mt-1 text-xl font-semibold text-white">{{ locale.t("dashboard.inbox.heading") }}</h2>
         </div>
         <Inbox class="h-5 w-5 text-teal-300" />
       </div>
@@ -43,14 +45,14 @@ onMounted(async () => {
             <div class="min-w-0 flex-1">
               <div class="flex flex-wrap items-center gap-2">
                 <p class="text-sm font-semibold text-white">
-                  {{ conversation.visitorName ?? conversation.visitorEmail ?? 'Anonymous guest' }}
+                  {{ conversation.visitorName ?? conversation.visitorEmail ?? locale.t("dashboard.common.anonymousGuest") }}
                 </p>
                 <span class="rounded-full bg-cyan-500/20 px-2.5 py-1 text-xs text-cyan-200">{{ conversation.status }}</span>
                 <span class="rounded-full bg-amber-500/20 px-2.5 py-1 text-xs text-amber-200">{{ conversation.leadStatus }}</span>
               </div>
               <p class="mt-2 text-sm text-slate-300">{{ dashboard.summarizeConversation(conversation) }}</p>
               <p class="mt-2 text-xs uppercase tracking-[0.2em] text-slate-500">
-                Updated {{ dashboard.formatDate(conversation.updatedAt) }} · {{ conversation.messages.length }} messages
+                {{ locale.t("dashboard.inbox.updated") }} {{ dashboard.formatDate(conversation.updatedAt) }} · {{ conversation.messages.length }} {{ locale.t("dashboard.inbox.messages") }}
               </p>
             </div>
 
@@ -60,7 +62,7 @@ onMounted(async () => {
               @click="dashboard.toggleTakeover(conversation)"
             >
               <Mail class="h-3.5 w-3.5" />
-              {{ conversation.status === 'HUMAN' ? 'Return to AI' : 'Take over chat' }}
+              {{ conversation.status === 'HUMAN' ? locale.t("dashboard.inbox.returnAi") : locale.t("dashboard.inbox.takeover") }}
             </button>
           </div>
 
@@ -86,7 +88,7 @@ onMounted(async () => {
             <input
               v-model="dashboard.replyDrafts[conversation.id]"
               type="text"
-              placeholder="Send a human follow-up message..."
+              :placeholder="locale.t('dashboard.inbox.replyPlaceholder')"
               class="w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white outline-none focus:border-teal-300"
             />
             <button
@@ -97,7 +99,7 @@ onMounted(async () => {
             >
               <LoaderCircle v-if="dashboard.replyingConversationId === conversation.id" class="h-3.5 w-3.5 animate-spin" />
               <Mail v-else class="h-3.5 w-3.5" />
-              Reply
+              {{ locale.t("dashboard.inbox.reply") }}
             </button>
           </div>
         </article>

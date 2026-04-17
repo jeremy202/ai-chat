@@ -2,10 +2,16 @@ import { createPinia } from "pinia";
 import { createApp } from "vue";
 import App from "./App.vue";
 import router from "./router";
+import { useLocaleStore } from "./stores/locale";
 import "./style.css";
 
 const app = createApp(App);
+const pinia = createPinia();
 
-app.use(createPinia());
+app.use(pinia);
 app.use(router);
+
+const locale = useLocaleStore(pinia);
+locale.initialize();
+
 app.mount("#app");

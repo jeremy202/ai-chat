@@ -4,9 +4,11 @@ import { onMounted } from "vue";
 import { useRouter } from "vue-router";
 import DashboardFrame from "../../components/dashboard/DashboardFrame.vue";
 import { useDashboardOps } from "../../composables/useDashboardOps";
+import { useLocaleStore } from "../../stores/locale";
 
 const router = useRouter();
 const dashboard = useDashboardOps();
+const locale = useLocaleStore();
 
 onMounted(async () => {
   await dashboard.initialize(router);
@@ -15,8 +17,8 @@ onMounted(async () => {
 
 <template>
   <DashboardFrame
-    title="Hospitality Command Center"
-    subtitle="Track conversations, lead quality, booking conversions, and team operations."
+    :title="locale.t('dashboard.overview.title')"
+    :subtitle="locale.t('dashboard.overview.subtitle')"
     :business-name="dashboard.business?.name ?? 'Dashboard'"
     :loading="dashboard.loading"
     :error="dashboard.error"
@@ -38,14 +40,14 @@ onMounted(async () => {
 
     <section class="mt-4 grid gap-4 xl:grid-cols-[1.2fr_1fr_1fr]">
       <article class="rounded-2xl border border-white/10 bg-slate-900/70 p-5">
-        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Conversation operations</p>
+        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ locale.t("dashboard.overview.conversationOps") }}</p>
         <div class="mt-3 grid gap-3 sm:grid-cols-2">
           <div class="rounded-xl border border-white/10 bg-white/5 p-3">
-            <p class="text-sm text-slate-400">Open now</p>
+            <p class="text-sm text-slate-400">{{ locale.t("dashboard.overview.openNow") }}</p>
             <p class="mt-1 text-2xl font-semibold text-white">{{ dashboard.openConversations }}</p>
           </div>
           <div class="rounded-xl border border-white/10 bg-white/5 p-3">
-            <p class="text-sm text-slate-400">Human handoff</p>
+            <p class="text-sm text-slate-400">{{ locale.t("dashboard.overview.humanHandoff") }}</p>
             <p class="mt-1 text-2xl font-semibold text-white">{{ dashboard.humanHandoffConversations }}</p>
           </div>
         </div>
@@ -53,7 +55,7 @@ onMounted(async () => {
 
       <article class="rounded-2xl border border-white/10 bg-slate-900/70 p-5">
         <div class="flex items-center justify-between">
-          <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Booking pipeline status</p>
+          <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ locale.t("dashboard.overview.bookingPipeline") }}</p>
           <CalendarDays class="h-4 w-4 text-teal-300" />
         </div>
         <div class="mt-3 space-y-3">
@@ -73,24 +75,24 @@ onMounted(async () => {
               />
             </div>
           </div>
-          <p v-if="dashboard.bookingStatusSummary.length === 0" class="text-sm text-slate-400">No booking statuses yet.</p>
+          <p v-if="dashboard.bookingStatusSummary.length === 0" class="text-sm text-slate-400">{{ locale.t("dashboard.overview.noStatuses") }}</p>
         </div>
       </article>
 
       <article class="rounded-2xl border border-white/10 bg-linear-to-br from-teal-500/10 via-slate-900 to-indigo-500/10 p-5">
         <div class="flex items-center justify-between">
-          <p class="text-xs uppercase tracking-[0.2em] text-slate-300">System profile</p>
+          <p class="text-xs uppercase tracking-[0.2em] text-slate-300">{{ locale.t("dashboard.overview.systemProfile") }}</p>
           <ShieldCheck class="h-4 w-4 text-teal-300" />
         </div>
         <ul class="mt-3 space-y-2 text-sm text-slate-300">
-          <li>Multi-tenant data model</li>
-          <li>Firebase authentication</li>
-          <li>RAG-backed concierge responses</li>
-          <li>Booking pipeline visibility</li>
+          <li>{{ locale.t("dashboard.overview.profile1") }}</li>
+          <li>{{ locale.t("dashboard.overview.profile2") }}</li>
+          <li>{{ locale.t("dashboard.overview.profile3") }}</li>
+          <li>{{ locale.t("dashboard.overview.profile4") }}</li>
         </ul>
         <div class="mt-4 rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-slate-300">
           <Sparkles class="mb-2 h-4 w-4 text-teal-300" />
-          Use sidebar pages to manage Knowledge, Inbox, Bookings, and Widget setup separately.
+          {{ locale.t("dashboard.overview.sidebarTip") }}
         </div>
       </article>
     </section>

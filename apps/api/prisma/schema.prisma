@@ -4,6 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 enum UserRole {
@@ -81,9 +82,60 @@ model Business {
   messages         Message[]
   bookings         Booking[]
   analyticsEvents  AnalyticsEvent[]
+  shifts           Shift[]
+  automations      Automation[]
+  regionalSettings RegionalSettings?
 
   @@index([slug])
   @@map("businesses")
+}
+
+model Shift {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  teamMember String
+  role       String
+  start      DateTime
+  end        DateTime
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([start])
+  @@map("shifts")
+}
+
+model Automation {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  title      String
+  type       String
+  schedule   String
+  enabled    Boolean  @default(true)
+  lastRunAt  DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([businessId])
+  @@map("automations")
+}
+
+model RegionalSettings {
+  id                  String   @id @default(cuid())
+  businessId          String   @unique
+  business            Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  defaultLanguage     String   @default("en-CA")
+  additionalLanguages Json
+  province            String   @default("ON")
+  timezone            String   @default("America/Toronto")
+  currency            String   @default("CAD")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@map("regional_settings")
 }
 
 model User {

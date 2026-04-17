@@ -151,6 +151,32 @@ export type WidgetConversationResponse = {
   conversation: Conversation;
 };
 
+export type ShiftEntry = {
+  id: string;
+  teamMember: string;
+  role: string;
+  start: string;
+  end: string;
+  notes?: string;
+};
+
+export type AutomationEntry = {
+  id: string;
+  title: string;
+  type: "INVOICE_REMINDER" | "INVENTORY_CHECK" | "FOLLOW_UP" | "OTHER";
+  schedule: "DAILY" | "WEEKLY" | "MONTHLY" | "MANUAL";
+  enabled: boolean;
+  lastRunAt?: string;
+};
+
+export type RegionalSettings = {
+  defaultLanguage: "en-CA" | "fr-CA";
+  additionalLanguages: string[];
+  province: string;
+  timezone: string;
+  currency: "CAD";
+};
+
 export const authApi = {
   signup(payload: {
     businessName: string;
@@ -220,6 +246,58 @@ export const adminApi = {
     websiteUrl?: string;
   }) {
     return client.put<{ business: Business }>("/api/admin/settings", payload);
+  },
+  getShifts() {
+    return client.get<{ shifts: ShiftEntry[] }>("/api/admin/shifts");
+  },
+  createShift(payload: Omit<ShiftEntry, "id">) {
+    return client.post<{ shift: ShiftEntry }>("/api/admin/shifts", payload);
+  },
+  getAutomations() {
+    return client.get<{ automations: AutomationEntry[] }>("/api/admin/automations");
+  },
+  createAutomation(payload: Omit<AutomationEntry, "id" | "lastRunAt">) {
+    return client.post<{ automation: AutomationEntry }>("/api/admin/automations", payload);
+  },
+  runAutomation(id: string) {
+    return client.post<{ automation: AutomationEntry; result: string }>(`/api/admin/automations/${id}/run`);
+  },
+  getReportSummary(period: "daily" | "weekly") {
+    return client.get<{
+      summary: {
+        period: string;
+        from: string;
+        to: string;
+        totalConversations: number;
+        humanHandoffs: number;
+        qualifiedLeads: number;
+        bookingsCaptured: number;
+        bookingStatuses: Record<string, number>;
+      };
+    }>(`/api/admin/reports/summary?period=${period}`);
+  },
+  getRegionalSettings() {
+    return client.get<{ settings: RegionalSettings }>("/api/admin/regional-settings");
+  },
+  updateRegionalSettings(payload: RegionalSettings) {
+    return client.put<{ settings: RegionalSettings }>("/api/admin/regional-settings", payload);
+  },
+  getInternalAssistantAnswer(question: string, context = "INTERNAL") {
+    return client.get<{ answer: string; usedKnowledgeSnippets: { id: string; score: number }[] }>(
+      `/api/admin/internal-assistant?question=${encodeURIComponent(question)}&context=${encodeURIComponent(context)}`,
+    );
+  },
+  getSupportReply(payload: {
+    customerMessage: string;
+    channel?: string;
+    priority?: "LOW" | "NORMAL" | "HIGH";
+  }) {
+    return client.post<{
+      suggestedReply: string;
+      priority: string;
+      channel: string;
+      groundingSnippetCount: number;
+    }>("/api/admin/support/reply", payload);
   },
 };
 

@@ -8,9 +8,11 @@ import {
   type KnowledgeItem,
 } from "../services/api";
 import { useAuthStore } from "../stores/auth";
+import { useLocaleStore } from "../stores/locale";
 
 export function useDashboardOps() {
   const auth = useAuthStore();
+  const locale = useLocaleStore();
 
   const loading = ref(true);
   const savingKnowledge = ref(false);
@@ -40,24 +42,24 @@ export function useDashboardOps() {
 
     return [
       {
-        label: "Chats handled",
+        label: locale.t("dashboard.cards.chats"),
         value: metrics.totalChats,
-        helper: "Guest conversations answered by AI",
+        helper: locale.t("dashboard.cards.chatsHelper"),
       },
       {
-        label: "Qualified leads",
+        label: locale.t("dashboard.cards.qualified"),
         value: metrics.qualifiedLeads,
-        helper: "Visitors who shared real booking intent",
+        helper: locale.t("dashboard.cards.qualifiedHelper"),
       },
       {
-        label: "Booking requests",
+        label: locale.t("dashboard.cards.bookings"),
         value: metrics.bookings,
-        helper: "Captures ready for staff follow-up",
+        helper: locale.t("dashboard.cards.bookingsHelper"),
       },
       {
-        label: "Conversion rate",
+        label: locale.t("dashboard.cards.conversion"),
         value: `${metrics.conversionRate}%`,
-        helper: "Simple ROI signal for operators",
+        helper: locale.t("dashboard.cards.conversionHelper"),
       },
     ];
   });
@@ -91,7 +93,7 @@ export function useDashboardOps() {
     const conversationEvents = sortedConversations.value.slice(0, 5).map((conversation) => ({
       id: conversation.id,
       type: "Conversation",
-      title: conversation.visitorName ?? conversation.visitorEmail ?? "Anonymous guest",
+      title: conversation.visitorName ?? conversation.visitorEmail ?? locale.t("dashboard.common.anonymousGuest"),
       subtitle: `${conversation.status} · ${conversation.leadStatus}`,
       timestamp: conversation.updatedAt,
     }));
@@ -99,7 +101,7 @@ export function useDashboardOps() {
     const bookingEvents = bookings.value.slice(0, 5).map((booking) => ({
       id: booking.id,
       type: "Booking",
-      title: booking.guestName ?? booking.email ?? "Guest lead",
+      title: booking.guestName ?? booking.email ?? locale.t("dashboard.common.guestLead"),
       subtitle: booking.status,
       timestamp: booking.createdAt,
     }));
@@ -110,7 +112,7 @@ export function useDashboardOps() {
   });
 
   function formatDate(value?: string | null) {
-    if (!value) return "Not provided";
+    if (!value) return locale.t("dashboard.common.notProvided");
 
     return new Intl.DateTimeFormat("en-CA", {
       month: "short",
@@ -121,7 +123,7 @@ export function useDashboardOps() {
 
   function summarizeConversation(conversation: Conversation) {
     const latest = conversation.messages[conversation.messages.length - 1];
-    return latest?.content ?? "No messages yet.";
+    return latest?.content ?? locale.t("dashboard.common.noMessages");
   }
 
   async function loadData() {

@@ -31,6 +31,13 @@ const envSchema = z.object({
   FIREBASE_PROJECT_ID: z.string().optional(),
   FIREBASE_CLIENT_EMAIL: z.string().optional(),
   FIREBASE_PRIVATE_KEY: z.string().optional(),
+  GROQ_API_KEY: z.string().optional(),
+  GROQ_BASE_URL: z.string().url().default("https://api.groq.com/openai/v1"),
+  GROQ_MODEL: z.string().default("llama-3.3-70b-versatile"),
+  XAI_API_KEY: z.string().optional(),
+  XAI_BASE_URL: z.string().url().default("https://api.x.ai/v1"),
+  XAI_MODEL: z.string().default("grok-3-mini"),
+  XAI_EMBEDDING_MODEL: z.string().default("grok-embedding-1"),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default("gpt-4.1-mini"),
   OPENAI_EMBEDDING_MODEL: z.string().default("text-embedding-3-small"),
@@ -88,7 +95,34 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
 });
 
-const openai = env.OPENAI_API_KEY ? new OpenAI({ apiKey: env.OPENAI_API_KEY }) : null;
+const chatClient = env.GROQ_API_KEY
+  ? new OpenAI({
+      apiKey: env.GROQ_API_KEY,
+      baseURL: env.GROQ_BASE_URL,
+    })
+  : env.XAI_API_KEY
+  ? new OpenAI({
+      apiKey: env.XAI_API_KEY,
+      baseURL: env.XAI_BASE_URL,
+    })
+  : env.OPENAI_API_KEY
+    ? new OpenAI({ apiKey: env.OPENAI_API_KEY })
+    : null;
+const embeddingClient = env.XAI_API_KEY
+  ? new OpenAI({
+      apiKey: env.XAI_API_KEY,
+      baseURL: env.XAI_BASE_URL,
+    })
+  : env.OPENAI_API_KEY
+    ? new OpenAI({ apiKey: env.OPENAI_API_KEY })
+    : null;
+const aiProvider = env.GROQ_API_KEY
+  ? "groq"
+  : env.XAI_API_KEY
+    ? "xai-grok"
+    : env.OPENAI_API_KEY
+      ? "openai"
+      : "fallback-local";
 const transporter =
   env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS
     ? nodemailer.createTransport({
@@ -123,6 +157,15 @@ type RetrievedSnippet = {
   id: string;
   content: string;
   score: number;
+};
+
+type RegionalSettings = {
+  businessId: string;
+  defaultLanguage: "en-CA" | "fr-CA";
+  additionalLanguages: string[];
+  province: string;
+  timezone: string;
+  currency: "CAD";
 };
 
 declare global {
@@ -225,6 +268,40 @@ const widgetMessageSchema = z.object({
 
 const adminReplySchema = z.object({
   content: z.string().min(1),
+});
+
+const supportReplySchema = z.object({
+  customerMessage: z.string().min(1),
+  channel: z.string().default("WEB_CHAT"),
+  priority: z.enum(["LOW", "NORMAL", "HIGH"]).default("NORMAL"),
+});
+
+const createShiftSchema = z.object({
+  teamMember: z.string().min(2),
+  role: z.string().min(2),
+  start: z.string().datetime(),
+  end: z.string().datetime(),
+  notes: z.string().optional(),
+});
+
+const createAutomationSchema = z.object({
+  title: z.string().min(2),
+  type: z.enum(["INVOICE_REMINDER", "INVENTORY_CHECK", "FOLLOW_UP", "OTHER"]),
+  schedule: z.enum(["DAILY", "WEEKLY", "MONTHLY", "MANUAL"]),
+  enabled: z.boolean().default(true),
+});
+
+const internalAssistantSchema = z.object({
+  question: z.string().min(1),
+  context: z.string().default("INTERNAL"),
+});
+
+const regionalSettingsSchema = z.object({
+  defaultLanguage: z.enum(["en-CA", "fr-CA"]),
+  additionalLanguages: z.array(z.string()).default([]),
+  province: z.string().min(2),
+  timezone: z.string().min(2),
+  currency: z.literal("CAD").default("CAD"),
 });
 
 const takeoverSchema = z.object({
@@ -381,16 +458,20 @@ function firstParam(value: string | string[] | undefined) {
 }
 
 async function embedText(text: string) {
-  if (!openai) {
+  if (!embeddingClient) {
     return fallbackEmbedding(text);
   }
 
-  const response = await openai.embeddings.create({
-    model: env.OPENAI_EMBEDDING_MODEL,
-    input: text,
-  });
+  try {
+    const response = await embeddingClient.embeddings.create({
+      model: env.XAI_API_KEY ? env.XAI_EMBEDDING_MODEL : env.OPENAI_EMBEDDING_MODEL,
+      input: text,
+    });
 
-  return response.data[0]?.embedding ?? fallbackEmbedding(text);
+    return response.data[0]?.embedding ?? fallbackEmbedding(text);
+  } catch {
+    return fallbackEmbedding(text);
+  }
 }
 
 function chunkText(content: string, maxLength = 600, overlap = 120) {
@@ -521,7 +602,7 @@ async function generateReply(options: {
 }) {
   const intent = detectIntent(options.userMessage);
 
-  if (!openai) {
+  if (!chatClient) {
     return buildFallbackReply(options.businessName, options.snippets, intent);
   }
 
@@ -529,41 +610,45 @@ async function generateReply(options: {
     ? options.snippets.map((snippet, index) => `[${index + 1}] ${snippet.content}`).join("\n")
     : "No relevant snippets were found.";
 
-  const completion = await openai.chat.completions.create({
-    model: env.OPENAI_MODEL,
-    temperature: 0.25,
-    messages: [
-      {
-        role: "system",
-        content: [
-          `You are an AI concierge for ${options.businessName}, a Canadian hospitality business.`,
-          "Only answer with information grounded in the provided knowledge snippets.",
-          "If the knowledge base does not contain the answer, say so clearly and offer to capture the guest's dates, email, and preferences for a human follow-up.",
-          "Your goal is to increase bookings, qualify leads, and sound polished and trustworthy.",
-          `Business support email: ${options.businessEmail}.`,
-          `Default welcome message: ${options.welcomeMessage}`,
-        ].join("\n"),
-      },
-      ...options.history.slice(-8).map((message) => ({
-        role: message.role === MessageRole.USER ? ("user" as const) : ("assistant" as const),
-        content: message.content,
-      })),
-      {
-        role: "user",
-        content: [
-          `Knowledge snippets:\n${knowledgeBlock}`,
-          `Visitor message:\n${options.userMessage}`,
-          `Detected intent: ${intent}`,
-          "Respond in a concise, premium, conversion-friendly tone. Mention uncertainty when the answer is not covered by the snippets.",
-        ].join("\n\n"),
-      },
-    ],
-  });
+  try {
+    const completion = await chatClient.chat.completions.create({
+      model: env.GROQ_API_KEY ? env.GROQ_MODEL : env.XAI_API_KEY ? env.XAI_MODEL : env.OPENAI_MODEL,
+      temperature: 0.25,
+      messages: [
+        {
+          role: "system",
+          content: [
+            `You are an AI concierge for ${options.businessName}, a Canadian hospitality business.`,
+            "Only answer with information grounded in the provided knowledge snippets.",
+            "If the knowledge base does not contain the answer, say so clearly and offer to capture the guest's dates, email, and preferences for a human follow-up.",
+            "Your goal is to increase bookings, qualify leads, and sound polished and trustworthy.",
+            `Business support email: ${options.businessEmail}.`,
+            `Default welcome message: ${options.welcomeMessage}`,
+          ].join("\n"),
+        },
+        ...options.history.slice(-8).map((message) => ({
+          role: message.role === MessageRole.USER ? ("user" as const) : ("assistant" as const),
+          content: message.content,
+        })),
+        {
+          role: "user",
+          content: [
+            `Knowledge snippets:\n${knowledgeBlock}`,
+            `Visitor message:\n${options.userMessage}`,
+            `Detected intent: ${intent}`,
+            "Respond in a concise, premium, conversion-friendly tone. Mention uncertainty when the answer is not covered by the snippets.",
+          ].join("\n\n"),
+        },
+      ],
+    });
 
-  return (
-    completion.choices[0]?.message?.content?.trim() ??
-    buildFallbackReply(options.businessName, options.snippets, intent)
-  );
+    return (
+      completion.choices[0]?.message?.content?.trim() ??
+      buildFallbackReply(options.businessName, options.snippets, intent)
+    );
+  } catch {
+    return buildFallbackReply(options.businessName, options.snippets, intent);
+  }
 }
 
 async function sendNotificationEmail(options: {
@@ -633,6 +718,47 @@ function resolveWidgetSnippetUrls(req: Request) {
 
 function formatWidgetSnippet(slug: string, urls: { appBaseUrl: string; apiBaseUrl: string }) {
   return `<script src="${urls.appBaseUrl}/widget.js" data-business="${slug}" data-host="${urls.appBaseUrl}" data-api="${urls.apiBaseUrl}"></script>`;
+}
+
+async function getRegionalSettingsForBusiness(businessId: string): Promise<RegionalSettings> {
+  const existing = await prisma.regionalSettings.findUnique({
+    where: { businessId },
+  });
+
+  if (existing) {
+    return {
+      businessId: existing.businessId,
+      defaultLanguage: existing.defaultLanguage as RegionalSettings["defaultLanguage"],
+      additionalLanguages: Array.isArray(existing.additionalLanguages)
+        ? existing.additionalLanguages.map((item) => String(item))
+        : ["fr-CA"],
+      province: existing.province,
+      timezone: existing.timezone,
+      currency: existing.currency as "CAD",
+    };
+  }
+
+  const created = await prisma.regionalSettings.create({
+    data: {
+      businessId,
+      defaultLanguage: "en-CA",
+      additionalLanguages: ["fr-CA"],
+      province: "ON",
+      timezone: "America/Toronto",
+      currency: "CAD",
+    },
+  });
+
+  return {
+    businessId: created.businessId,
+    defaultLanguage: created.defaultLanguage as RegionalSettings["defaultLanguage"],
+    additionalLanguages: Array.isArray(created.additionalLanguages)
+      ? created.additionalLanguages.map((item) => String(item))
+      : ["fr-CA"],
+    province: created.province,
+    timezone: created.timezone,
+    currency: created.currency as "CAD",
+  };
 }
 
 async function maybeUpsertBooking(options: {
@@ -744,7 +870,8 @@ app.get("/api/health", (_req, res) => {
   res.json({
     status: "ok",
     service: "ai-concierge-api",
-    aiProvider: openai ? "openai" : "fallback-local",
+    aiProvider,
+    embeddingProvider: embeddingClient ? (env.XAI_API_KEY ? "xai-grok" : "openai") : "fallback-local",
   });
 });
 
@@ -1383,6 +1510,252 @@ app.put(
   }),
 );
 
+app.post(
+  "/api/admin/support/reply",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.auth!;
+    const payload = supportReplySchema.parse(req.body);
+
+    const snippets = await retrieveKnowledge(businessId, payload.customerMessage);
+    const business = await prisma.business.findUnique({ where: { id: businessId } });
+
+    const reply = await generateReply({
+      businessName: business?.name ?? "Business",
+      businessEmail: business?.email ?? "support@example.com",
+      welcomeMessage: business?.welcomeMessage ?? "Welcome",
+      userMessage: payload.customerMessage,
+      snippets,
+      history: [],
+    });
+
+    res.json({
+      suggestedReply: reply,
+      priority: payload.priority,
+      channel: payload.channel,
+      groundingSnippetCount: snippets.length,
+    });
+  }),
+);
+
+app.get(
+  "/api/admin/shifts",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.auth!;
+    const shifts = await prisma.shift.findMany({
+      where: { businessId },
+      orderBy: { start: "asc" },
+    });
+    res.json({ shifts });
+  }),
+);
+
+app.post(
+  "/api/admin/shifts",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.auth!;
+    const payload = createShiftSchema.parse(req.body);
+    const shift = await prisma.shift.create({
+      data: {
+        businessId,
+        teamMember: payload.teamMember,
+        role: payload.role,
+        start: new Date(payload.start),
+        end: new Date(payload.end),
+        notes: payload.notes,
+      },
+    });
+    res.status(201).json({ shift });
+  }),
+);
+
+app.get(
+  "/api/admin/internal-assistant",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.auth!;
+    const question = String(req.query.question ?? "").trim();
+    if (!question) {
+      res.status(400).json({ error: "Question is required." });
+      return;
+    }
+
+    const payload = internalAssistantSchema.parse({ question, context: String(req.query.context ?? "INTERNAL") });
+    const snippets = await retrieveKnowledge(businessId, payload.question);
+    const business = await prisma.business.findUnique({ where: { id: businessId } });
+
+    const answer = await generateReply({
+      businessName: business?.name ?? "Business",
+      businessEmail: business?.email ?? "support@example.com",
+      welcomeMessage: business?.welcomeMessage ?? "Welcome",
+      userMessage: payload.question,
+      snippets,
+      history: [],
+    });
+
+    res.json({
+      answer,
+      usedKnowledgeSnippets: snippets.map((snippet) => ({
+        id: snippet.id,
+        score: Number(snippet.score.toFixed(3)),
+      })),
+    });
+  }),
+);
+
+app.get(
+  "/api/admin/automations",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.auth!;
+    const automations = await prisma.automation.findMany({
+      where: { businessId },
+      orderBy: { createdAt: "desc" },
+    });
+    res.json({ automations });
+  }),
+);
+
+app.post(
+  "/api/admin/automations",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.auth!;
+    const payload = createAutomationSchema.parse(req.body);
+    const automation = await prisma.automation.create({
+      data: {
+        businessId,
+        title: payload.title,
+        type: payload.type,
+        schedule: payload.schedule,
+        enabled: payload.enabled,
+      },
+    });
+    res.status(201).json({ automation });
+  }),
+);
+
+app.post(
+  "/api/admin/automations/:id/run",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.auth!;
+    const automationId = firstParam(req.params.id);
+    if (!automationId) {
+      res.status(400).json({ error: "Automation id is required." });
+      return;
+    }
+
+    const item = await prisma.automation.findFirst({
+      where: {
+        id: automationId,
+        businessId,
+      },
+    });
+    if (!item) {
+      res.status(404).json({ error: "Automation not found." });
+      return;
+    }
+
+    const updated = await prisma.automation.update({
+      where: { id: item.id },
+      data: {
+        lastRunAt: new Date(),
+      },
+    });
+    res.json({ automation: updated, result: `${updated.type} executed.` });
+  }),
+);
+
+app.get(
+  "/api/admin/reports/summary",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.auth!;
+    const period = String(req.query.period ?? "daily");
+    const now = new Date();
+    const from = new Date(now);
+    if (period === "weekly") {
+      from.setDate(now.getDate() - 7);
+    } else {
+      from.setDate(now.getDate() - 1);
+    }
+
+    const [conversations, bookings] = await Promise.all([
+      prisma.conversation.findMany({
+        where: {
+          businessId,
+          createdAt: { gte: from },
+        },
+      }),
+      prisma.booking.findMany({
+        where: {
+          businessId,
+          createdAt: { gte: from },
+        },
+      }),
+    ]);
+
+    const summary = {
+      period,
+      from: from.toISOString(),
+      to: now.toISOString(),
+      totalConversations: conversations.length,
+      humanHandoffs: conversations.filter((conversation) => conversation.status === ConversationStatus.HUMAN)
+        .length,
+      qualifiedLeads: conversations.filter((conversation) => conversation.leadStatus !== LeadStatus.NEW).length,
+      bookingsCaptured: bookings.length,
+      bookingStatuses: bookings.reduce<Record<string, number>>((acc, booking) => {
+        acc[booking.status] = (acc[booking.status] ?? 0) + 1;
+        return acc;
+      }, {}),
+    };
+
+    res.json({ summary });
+  }),
+);
+
+app.get(
+  "/api/admin/regional-settings",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.auth!;
+    const settings = await getRegionalSettingsForBusiness(businessId);
+    res.json({ settings });
+  }),
+);
+
+app.put(
+  "/api/admin/regional-settings",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.auth!;
+    const payload = regionalSettingsSchema.parse(req.body);
+    await prisma.regionalSettings.upsert({
+      where: { businessId },
+      create: {
+        businessId,
+        defaultLanguage: payload.defaultLanguage,
+        additionalLanguages: payload.additionalLanguages,
+        province: payload.province,
+        timezone: payload.timezone,
+        currency: payload.currency,
+      },
+      update: {
+        defaultLanguage: payload.defaultLanguage,
+        additionalLanguages: payload.additionalLanguages,
+        province: payload.province,
+        timezone: payload.timezone,
+        currency: payload.currency,
+      },
+    });
+    const settings: RegionalSettings = { businessId, ...payload };
+    res.json({ settings });
+  }),
+);
+
 app.get(
   "/api/widget/:slug/config",
   asyncHandler(async (req, res) => {
@@ -1627,7 +2000,10 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   });
 });
 
-if (process.env.VERCEL !== "1") {
+const isVercelRuntime = process.env.VERCEL === "1";
+const isRailwayRuntime = Boolean(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID);
+
+if (!isVercelRuntime || isRailwayRuntime) {
   const port = Number(process.env.PORT ?? 4000);
   app.listen(port, () => {
     console.info(`AI Concierge API listening on http://localhost:${port}`);

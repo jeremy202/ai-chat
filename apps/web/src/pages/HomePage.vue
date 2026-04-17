@@ -2,434 +2,608 @@
 import {
   ArrowRight,
   Bot,
-  Check,
   ChartNoAxesCombined,
   ConciergeBell,
-  CreditCard,
-  MessageSquareMore,
+  Globe2,
   Rocket,
   ShieldCheck,
   Sparkles,
+  Zap,
+  CheckCircle2,
+  MessageSquare,
+  Users,
+  BarChart3,
+  Languages,
+  Clock,
+  Headphones,
+  LayoutGrid,
+  Star,
 } from "lucide-vue-next";
 import { computed } from "vue";
 import { RouterLink } from "vue-router";
+import { useLocaleStore } from "../stores/locale";
 import { useAuthStore } from "../stores/auth";
 
 const auth = useAuthStore();
-
-const primaryLink = computed(() => (auth.isAuthenticated ? "/dashboard" : "/signup"));
+const locale = useLocaleStore();
+const primaryLink = computed(() =>
+  auth.isAuthenticated ? "/dashboard" : "/signup",
+);
 
 const features = [
   {
-    title: "Booking-focused AI conversations",
-    description:
-      "Guide guests from question to reservation by answering pricing, room, amenity, and policy questions with grounded property context.",
+    titleKey: "feature.support.title",
+    descriptionKey: "feature.support.description",
     icon: Bot,
+    gradient: "from-emerald-500/20 to-teal-500/20",
   },
   {
-    title: "Hospitality-first knowledge base",
-    description:
-      "Upload FAQs, room descriptions, pricing rules, and house policies, then let retrieval keep the assistant accurate and conversion friendly.",
+    titleKey: "feature.shifts.title",
+    descriptionKey: "feature.shifts.description",
     icon: ConciergeBell,
+    gradient: "from-blue-500/20 to-cyan-500/20",
   },
   {
-    title: "Inbox with human handoff",
-    description:
-      "Move high-intent conversations to staff when needed without losing history, context, or captured guest details.",
-    icon: MessageSquareMore,
+    titleKey: "feature.internal.title",
+    descriptionKey: "feature.internal.description",
+    icon: ShieldCheck,
+    gradient: "from-violet-500/20 to-purple-500/20",
   },
   {
-    title: "ROI clarity for operators",
-    description:
-      "Surface chat volume, lead quality, booking requests, and conversion rates so boutique teams can connect AI directly to revenue.",
+    titleKey: "feature.automations.title",
+    descriptionKey: "feature.automations.description",
+    icon: Sparkles,
+    gradient: "from-amber-500/20 to-orange-500/20",
+  },
+  {
+    titleKey: "feature.reports.title",
+    descriptionKey: "feature.reports.description",
     icon: ChartNoAxesCombined,
+    gradient: "from-rose-500/20 to-pink-500/20",
+  },
+  {
+    titleKey: "feature.locale.title",
+    descriptionKey: "feature.locale.description",
+    icon: Globe2,
+    gradient: "from-indigo-500/20 to-blue-500/20",
   },
 ];
 
-const pricingPlans = [
+const stats = [
+  { labelKey: "stats.setup", valueKey: "stats.setupValue", icon: Clock },
   {
-    name: "Starter",
-    price: "$49",
-    period: "/month",
-    description: "For single-property operators proving ROI from web chat.",
-    cta: "Start Starter",
-    highlighted: false,
-    items: ["Up to 2,000 monthly messages", "1 business workspace", "Knowledge base + widget embed", "Basic inbox + booking captures"],
+    labelKey: "stats.coverage",
+    valueKey: "stats.coverageValue",
+    icon: Headphones,
+  },
+  { labelKey: "stats.focus", valueKey: "stats.focusValue", icon: BarChart3 },
+];
+
+const howItWorks = [
+  {
+    step: "01",
+    titleKey: "how.step1.title",
+    descriptionKey: "how.step1.description",
   },
   {
-    name: "Growth",
-    price: "$149",
-    period: "/month",
-    description: "For active boutique brands handling regular booking volume.",
-    cta: "Choose Growth",
-    highlighted: true,
-    items: ["Up to 10,000 monthly messages", "3 team seats + role controls", "Advanced analytics + lead scoring", "Priority handoff and response insights"],
+    step: "02",
+    titleKey: "how.step2.title",
+    descriptionKey: "how.step2.description",
   },
   {
-    name: "Scale",
-    price: "Custom",
-    period: "",
-    description: "For multi-property groups and high-volume hospitality teams.",
-    cta: "Talk to sales",
-    highlighted: false,
-    items: ["Unlimited properties/workspaces", "Custom SLA + onboarding", "Custom integrations", "Dedicated support channel"],
+    step: "03",
+    titleKey: "how.step3.title",
+    descriptionKey: "how.step3.description",
   },
 ];
+
+const outcomes = ["outcomes.1", "outcomes.2", "outcomes.3", "outcomes.4"];
+
+const pricing = [
+  {
+    nameKey: "pricing.starter.name",
+    price: "$49",
+    periodKey: "pricing.period",
+    descriptionKey: "pricing.starter.description",
+    featured: false,
+  },
+  {
+    nameKey: "pricing.growth.name",
+    price: "$149",
+    periodKey: "pricing.period",
+    descriptionKey: "pricing.growth.description",
+    featured: true,
+  },
+  {
+    nameKey: "pricing.scale.name",
+    price: "",
+    periodKey: "",
+    descriptionKey: "pricing.scale.description",
+    featured: false,
+  },
+];
+
+function onLocaleChange(event: Event) {
+  const target = event.target as HTMLSelectElement;
+  locale.applyLocale(target.value === "fr-CA" ? "fr-CA" : "en-CA");
+}
 </script>
 
 <template>
-  <div class="app-shell px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
-    <div class="mx-auto flex max-w-7xl flex-col gap-6">
-      <header class="glass-card flex items-center justify-between px-6 py-4">
-        <div class="flex items-center gap-3">
-          <div
-            class="flex h-11 w-11 items-center justify-center rounded-2xl bg-linear-to-br from-teal-500 to-cyan-500 text-white shadow-lg shadow-teal-500/25"
-          >
-            <Sparkles class="h-5 w-5" />
-          </div>
-          <div>
-            <p class="text-sm font-semibold uppercase tracking-[0.25em] text-teal-700">
-              AI Concierge Assistant
-            </p>
-            <p class="text-sm text-slate-500">
-              Hospitality AI for Canadian hotels, Airbnbs, and boutique stays
-            </p>
-          </div>
-        </div>
-        <div class="hidden items-center gap-2 lg:flex">
-          <a class="pill-button border border-transparent bg-transparent text-slate-600 hover:border-slate-200 hover:bg-white" href="#features">
-            Features
-          </a>
-          <a class="pill-button border border-transparent bg-transparent text-slate-600 hover:border-slate-200 hover:bg-white" href="#pricing">
-            Pricing
-          </a>
-          <a class="pill-button border border-transparent bg-transparent text-slate-600 hover:border-slate-200 hover:bg-white" href="#roi">
-            ROI
-          </a>
-        </div>
-        <div class="flex items-center gap-3">
-          <RouterLink class="pill-button border border-slate-200 bg-white text-slate-700" to="/login">
-            Log in
-          </RouterLink>
-          <RouterLink
-            class="pill-button bg-slate-900 text-white shadow-lg shadow-slate-900/15"
-            :to="primaryLink"
-          >
-            {{ auth.isAuthenticated ? "Open dashboard" : "Start free setup" }}
-          </RouterLink>
-        </div>
-      </header>
+  <div
+    class="relative min-h-screen overflow-x-hidden bg-slate-950 text-slate-100"
+  >
+    <!-- Animated Background Gradients -->
+    <div class="fixed inset-0 overflow-hidden pointer-events-none">
+      <div
+        class="absolute -top-40 -right-40 h-80 w-80 rounded-full bg-teal-500/15 blur-[120px]"
+      />
+      <div
+        class="absolute top-60 -left-40 h-80 w-80 rounded-full bg-indigo-500/15 blur-[120px]"
+      />
+      <div
+        class="absolute bottom-40 right-20 h-60 w-60 rounded-full bg-emerald-500/10 blur-[100px]"
+      />
+      <div
+        class="absolute inset-0 bg-[radial-gradient(ellipse_at_top,var(--tw-gradient-stops))] from-slate-900/0 via-slate-950/60 to-slate-950"
+      />
+    </div>
 
-      <section class="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-        <div class="glass-card overflow-hidden p-8 sm:p-10">
-          <div
-            class="mb-6 inline-flex items-center gap-2 rounded-full border border-teal-200 bg-teal-50 px-4 py-2 text-sm font-medium text-teal-700"
-          >
-            <ShieldCheck class="h-4 w-4" />
-            Multi-tenant, RAG-powered, booking-optimized
-          </div>
-          <h1 class="max-w-3xl text-4xl font-semibold tracking-tight text-slate-950 sm:text-6xl">
-            Turn guest questions into more confirmed stays.
-          </h1>
-          <p class="mt-6 max-w-2xl text-lg leading-8 text-slate-600">
-            AI Concierge Assistant helps hospitality brands respond instantly, recommend the right
-            room or service, capture lead details, and escalate to staff only when it matters.
-          </p>
+    <!-- Soft light streak overlay -->
+    <div
+      class="fixed inset-0 pointer-events-none opacity-25 bg-linear-to-b from-transparent via-white/2 to-transparent"
+    />
 
-          <div class="mt-8 flex flex-col gap-3 sm:flex-row">
-            <RouterLink
-              class="pill-button bg-teal-600 px-5 py-3 text-white shadow-xl shadow-teal-600/20"
-              :to="primaryLink"
-            >
-              Launch the MVP
-              <ArrowRight class="ml-2 h-4 w-4" />
-            </RouterLink>
-            <a
-              class="pill-button border border-slate-200 bg-white px-5 py-3 text-slate-700"
-              href="#roi"
-            >
-              See the ROI model
-            </a>
-          </div>
-
-          <div class="mt-10 grid gap-4 sm:grid-cols-3">
-            <div class="soft-panel p-5">
-              <p class="text-sm text-slate-500">Setup time</p>
-              <p class="mt-2 text-3xl font-semibold text-slate-950">&lt; 5 min</p>
-              <p class="mt-2 text-sm text-slate-600">Drop in the script and connect your knowledge.</p>
-            </div>
-            <div class="soft-panel p-5">
-              <p class="text-sm text-slate-500">Goal</p>
-              <p class="mt-2 text-3xl font-semibold text-slate-950">More bookings</p>
-              <p class="mt-2 text-sm text-slate-600">
-                AI answers pricing and availability questions before the lead goes cold.
-              </p>
-            </div>
-            <div class="soft-panel p-5">
-              <p class="text-sm text-slate-500">Trust signal</p>
-              <p class="mt-2 text-3xl font-semibold text-slate-950">Grounded RAG</p>
-              <p class="mt-2 text-sm text-slate-600">
-                The assistant responds from your uploaded policies, room details, and rates.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div class="glass-card p-6">
-          <div class="rounded-4xl bg-slate-950 p-5 text-white">
-            <div class="mb-4 flex items-center justify-between">
-              <div class="flex items-center gap-3">
-                <div class="rounded-2xl bg-white/10 p-3">
-                  <Bot class="h-5 w-5 text-teal-300" />
+    <div class="relative z-10">
+      <div class="mx-auto max-w-11/12 px-3 py-6 sm:px-4 lg:px-5">
+        <!-- Enhanced Header -->
+        <header
+          class="sticky top-4 z-50 rounded-2xl border border-white/8 bg-slate-900/75 px-4 py-3 backdrop-blur-xl shadow-xl shadow-black/20"
+        >
+          <div class="flex items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+              <div class="relative">
+                <div
+                  class="absolute inset-0 rounded-xl bg-teal-500/30 blur-lg"
+                />
+                <div
+                  class="relative flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-teal-400 to-emerald-500 shadow-lg"
+                >
+                  <Sparkles class="h-5 w-5 text-white" />
                 </div>
-                <div>
-                  <p class="font-medium">Maple Stay AI Concierge</p>
-                  <p class="text-sm text-slate-300">Website widget preview</p>
-                </div>
-              </div>
-              <span class="rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-medium text-emerald-300">
-                Live
-              </span>
-            </div>
-
-            <div class="space-y-4 rounded-[1.75rem] bg-white/6 p-4">
-              <div class="max-w-[88%] rounded-3xl rounded-bl-md bg-white/10 px-4 py-3 text-sm">
-                Hi! I can help with availability, room recommendations, pet policies, and booking
-                requests.
-              </div>
-              <div
-                class="ml-auto max-w-[85%] rounded-3xl rounded-br-md bg-teal-400 px-4 py-3 text-sm text-slate-950"
-              >
-                We need a two-night stay for 2 guests in Vancouver. Is breakfast included?
-              </div>
-              <div class="max-w-[88%] rounded-3xl rounded-bl-md bg-white/10 px-4 py-3 text-sm">
-                Yes — our Harbour King and Cedar Loft rates include breakfast for two. If you share
-                your dates and email, I can capture a booking request for the team right away.
-              </div>
-            </div>
-
-            <div class="mt-6 grid gap-3 sm:grid-cols-2">
-              <div class="rounded-3xl border border-white/10 bg-white/5 p-4">
-                <p class="text-sm font-medium text-white">Suggested next step</p>
-                <p class="mt-2 text-sm text-slate-300">
-                  Capture check-in/out dates and route warm leads into the bookings inbox.
-                </p>
-              </div>
-              <div class="rounded-3xl border border-white/10 bg-white/5 p-4">
-                <p class="text-sm font-medium text-white">Human handoff</p>
-                <p class="mt-2 text-sm text-slate-300">
-                  Staff can take over premium conversations without losing transcript history.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="features" class="grid gap-6 lg:grid-cols-2">
-        <div class="glass-card p-8">
-          <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Why this works</p>
-          <div class="mt-6 grid gap-4 sm:grid-cols-2">
-            <article
-              v-for="feature in features"
-              :key="feature.title"
-              class="soft-panel flex h-full flex-col gap-4 p-5"
-            >
-              <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-white">
-                <component :is="feature.icon" class="h-5 w-5" />
               </div>
               <div>
-                <h2 class="text-xl font-semibold text-slate-950">{{ feature.title }}</h2>
-                <p class="mt-2 text-sm leading-6 text-slate-600">{{ feature.description }}</p>
+                <p
+                  class="text-sm font-bold uppercase tracking-[0.2em] bg-linear-to-r from-teal-300 to-emerald-300 bg-clip-text text-transparent"
+                >
+                  {{ locale.t("brand.name") }}
+                </p>
+                <p class="text-xs text-slate-400">
+                  {{ locale.t("brand.tagline") }}
+                </p>
+              </div>
+            </div>
+            <div
+              class="hidden items-center gap-6 text-sm font-medium text-slate-300 lg:flex"
+            >
+              <a
+                href="#features"
+                class="transition-all hover:text-teal-300 hover:-translate-y-0.5"
+                >{{ locale.t("nav.features") }}</a
+              >
+              <a
+                href="#how"
+                class="transition-all hover:text-teal-300 hover:-translate-y-0.5"
+                >{{ locale.t("nav.how") }}</a
+              >
+              <a
+                href="#pricing"
+                class="transition-all hover:text-teal-300 hover:-translate-y-0.5"
+                >{{ locale.t("nav.pricing") }}</a
+              >
+            </div>
+            <div class="flex items-center gap-3">
+              <select
+                class="rounded-full border border-white/10 bg-slate-800/80 px-3 py-2 text-xs font-medium text-slate-200 cursor-pointer hover:bg-slate-800 transition-all backdrop-blur"
+                :value="locale.locale"
+                @change="onLocaleChange"
+              >
+                <option value="en-CA">{{ locale.t("locale.english") }}</option>
+                <option value="fr-CA">{{ locale.t("locale.french") }}</option>
+              </select>
+              <RouterLink
+                to="/login"
+                class="hidden sm:inline-flex rounded-full border border-white/10 px-5 py-2 text-sm font-medium text-slate-200 transition-all hover:bg-white/10 hover:border-white/20"
+              >
+                {{ locale.t("cta.login") }}
+              </RouterLink>
+              <RouterLink
+                :to="primaryLink"
+                class="inline-flex items-center gap-2 rounded-full bg-linear-to-r from-teal-500 to-emerald-500 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-teal-500/25 transition-all hover:scale-105 hover:shadow-teal-500/40"
+              >
+                {{
+                  auth.isAuthenticated
+                    ? locale.t("cta.dashboard")
+                    : locale.t("cta.start")
+                }}
+                <Rocket class="h-4 w-4" />
+              </RouterLink>
+            </div>
+          </div>
+        </header>
+
+        <!-- Hero Section -->
+        <section class="mt-6">
+          <div class="relative">
+            <div
+              class="absolute -top-4 -left-4 rounded-full bg-teal-500/20 blur-3xl px-6 py-20"
+            />
+            <div
+              class="relative rounded-3xl border border-white/8 bg-linear-to-br from-slate-900/90 to-slate-950/90 shadow-xl shadow-black/30 backdrop-blur-sm px-10 py-20"
+            >
+              <div
+                class="grid gap-20 lg:grid-cols-[1.1fr_0.9fr] lg:items-center"
+              >
+                <div>
+                  <div
+                    class="inline-flex items-center gap-2 rounded-full border border-teal-400/30 bg-teal-400/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.2em] text-teal-300 backdrop-blur"
+                  >
+                    <Zap class="h-3.5 w-3.5" />
+                    {{ locale.t("hero.badge") }}
+                  </div>
+                  <h1
+                    class="mt-5 text-3xl font-bold tracking-tight text-white sm:text-4xl lg:text-5xl"
+                  >
+                    {{ locale.t("hero.title") }}
+                  </h1>
+                  <p
+                    class="mt-4 max-w-2xl text-sm leading-relaxed text-slate-300 sm:text-base"
+                  >
+                    {{ locale.t("hero.subtitle") }}
+                  </p>
+                  <div class="mt-6 flex flex-col gap-2.5 sm:flex-row">
+                    <RouterLink
+                      :to="primaryLink"
+                      class="group inline-flex items-center justify-center gap-2 rounded-full bg-linear-to-r from-teal-500 to-emerald-500 px-6 py-3 font-semibold text-white shadow-md shadow-teal-500/25 transition hover:brightness-110"
+                    >
+                      {{ locale.t("cta.launch") }}
+                      <ArrowRight
+                        class="h-4 w-4 transition-transform group-hover:translate-x-1"
+                      />
+                    </RouterLink>
+                    <a
+                      href="#features"
+                      class="inline-flex items-center justify-center rounded-full border border-white/15 bg-white/5 px-6 py-3 font-medium text-slate-200 transition hover:bg-white/10"
+                    >
+                      {{ locale.t("nav.features") }}
+                    </a>
+                  </div>
+                  <div class="mt-7 grid grid-cols-3 gap-2.5">
+                    <div
+                      v-for="stat in stats"
+                      :key="stat.labelKey"
+                      class="rounded-xl border border-white/6 bg-white/3 p-3 text-center transition hover:bg-white/6"
+                    >
+                      <component
+                        :is="stat.icon"
+                        class="mx-auto h-5 w-5 text-teal-400 mb-2"
+                      />
+                      <p
+                        class="text-xs uppercase tracking-wider text-slate-400"
+                      >
+                        {{ locale.t(stat.labelKey) }}
+                      </p>
+                      <p class="mt-1 text-lg font-bold text-white">
+                        {{ locale.t(stat.valueKey) }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                      <div
+                        class="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"
+                      />
+                      <p
+                        class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400"
+                      >
+                        {{ locale.t("banner.preview") }}
+                      </p>
+                    </div>
+                    <div class="flex items-center gap-1 text-xs text-slate-500">
+                      <MessageSquare class="h-3 w-3" />
+                      <span>{{ locale.t("banner.assistant") }}</span>
+                    </div>
+                  </div>
+                  <div class="space-y-3 rounded-2xl bg-slate-950/50 p-4">
+                    <div class="flex gap-3 max-w-[85%]">
+                      <div
+                        class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-700"
+                      >
+                        <Users class="h-3.5 w-3.5 text-slate-300" />
+                      </div>
+                      <div
+                        class="rounded-2xl rounded-bl-md bg-slate-800 px-4 py-2.5 text-sm text-slate-200"
+                      >
+                        {{ locale.t("banner.msg1") }}
+                      </div>
+                    </div>
+                    <div class="flex gap-3 justify-end">
+                      <div
+                        class="rounded-2xl rounded-br-md bg-linear-to-r from-teal-500 to-emerald-500 px-4 py-2.5 text-sm text-white shadow-md"
+                      >
+                        {{ locale.t("banner.msg2") }}
+                      </div>
+                      <div
+                        class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-teal-500/20"
+                      >
+                        <Bot class="h-3.5 w-3.5 text-teal-300" />
+                      </div>
+                    </div>
+                    <div class="flex gap-3 max-w-[85%]">
+                      <div
+                        class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-700"
+                      >
+                        <Users class="h-3.5 w-3.5 text-slate-300" />
+                      </div>
+                      <div
+                        class="rounded-2xl rounded-bl-md bg-slate-800 px-4 py-2.5 text-sm text-slate-200"
+                      >
+                        {{ locale.t("banner.msg3") }}
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    class="mt-4 flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3"
+                  >
+                    <Languages class="h-4 w-4 text-emerald-400" />
+                    <p class="text-xs font-medium text-emerald-300">
+                      {{ locale.t("banner.regionalApplied") }}
+                      <span class="font-mono">fr-CA</span>,
+                      {{ locale.t("banner.province") }}
+                      <span class="font-mono">QC</span>, timezone
+                      {{ locale.t("banner.timezone") }}
+                      <span class="font-mono">America/Montreal</span>.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Features Section -->
+        <section id="features" class="mt-16 scroll-mt-20">
+          <div class="text-center mb-12">
+            <p
+              class="text-sm font-semibold uppercase tracking-[0.3em] text-teal-400"
+            >
+              {{ locale.t("home.modules") }}
+            </p>
+            <h2
+              class="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl"
+            >
+              {{ locale.t("home.modulesTitle") }}
+            </h2>
+            <p class="mt-4 text-slate-400 max-w-2xl mx-auto">
+              {{ locale.t("home.modulesSubtitle") }}
+            </p>
+          </div>
+          <div class="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+            <article
+              v-for="feature in features"
+              :key="feature.titleKey"
+              class="group relative rounded-2xl border border-white/6 bg-linear-to-br from-slate-900/80 to-slate-950/80 p-6 transition hover:border-teal-500/30 hover:shadow-lg hover:shadow-teal-500/10"
+            >
+              <div
+                class="absolute inset-0 rounded-2xl bg-linear-to-br opacity-0 transition-opacity group-hover:opacity-100 pointer-events-none"
+                :class="feature.gradient"
+              />
+              <div class="relative">
+                <div
+                  class="flex h-12 w-12 items-center justify-center rounded-xl bg-linear-to-br from-teal-500/20 to-emerald-500/20 text-teal-300 transition-transform group-hover:scale-105"
+                >
+                  <component :is="feature.icon" class="h-6 w-6" />
+                </div>
+                <h3 class="mt-5 text-lg font-semibold text-white">
+                  {{ locale.t(feature.titleKey) }}
+                </h3>
+                <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                  {{ locale.t(feature.descriptionKey) }}
+                </p>
               </div>
             </article>
           </div>
-        </div>
+        </section>
 
-        <div id="roi" class="glass-card p-8">
-          <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
-            Revenue-oriented by design
-          </p>
-          <div class="mt-6 space-y-4">
-            <div class="soft-panel p-5">
-              <p class="text-sm text-slate-500">Faster first response</p>
-              <p class="mt-2 text-2xl font-semibold text-slate-950">Answer guests instantly, 24/7</p>
-              <p class="mt-2 text-sm text-slate-600">
-                Reduce missed bookings from after-hours website inquiries and peak-season lag.
-              </p>
-            </div>
-            <div class="soft-panel p-5">
-              <p class="text-sm text-slate-500">Lead qualification</p>
-              <p class="mt-2 text-2xl font-semibold text-slate-950">
-                Collect dates, preferences, and contact details automatically
-              </p>
-              <p class="mt-2 text-sm text-slate-600">
-                Staff spend less time triaging and more time closing high-intent leads.
-              </p>
-            </div>
-            <div class="soft-panel p-5">
-              <p class="text-sm text-slate-500">Conversion insight</p>
-              <p class="mt-2 text-2xl font-semibold text-slate-950">
-                Measure chats, leads, bookings, and takeover moments
-              </p>
-              <p class="mt-2 text-sm text-slate-600">
-                Operators get a clean view of whether the widget is moving revenue metrics.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="pricing" class="glass-card p-8 sm:p-10">
-        <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Pricing</p>
-            <h2 class="mt-3 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-              Pick a plan that matches your booking volume
-            </h2>
-            <p class="mt-3 max-w-2xl text-slate-600">
-              Start on Spark-like MVP pricing, then scale as your lead capture and conversion volume grows.
-            </p>
-          </div>
-          <RouterLink class="pill-button border border-slate-200 bg-white text-slate-700" :to="primaryLink">
-            <CreditCard class="mr-2 h-4 w-4" />
-            Start free setup
-          </RouterLink>
-        </div>
-
-        <div class="mt-8 grid gap-4 lg:grid-cols-3">
-          <article
-            v-for="plan in pricingPlans"
-            :key="plan.name"
-            class="rounded-[1.75rem] border p-6"
-            :class="
-              plan.highlighted
-                ? 'border-teal-300 bg-linear-to-b from-teal-50 to-white shadow-lg shadow-teal-500/10'
-                : 'border-slate-200 bg-white/80'
-            "
-          >
-            <p class="text-sm font-semibold uppercase tracking-[0.2em]" :class="plan.highlighted ? 'text-teal-700' : 'text-slate-500'">
-              {{ plan.name }}
-            </p>
-            <p class="mt-3 flex items-end gap-1">
-              <span class="text-4xl font-semibold tracking-tight text-slate-950">{{ plan.price }}</span>
-              <span class="pb-1 text-sm text-slate-500">{{ plan.period }}</span>
-            </p>
-            <p class="mt-3 text-sm leading-6 text-slate-600">{{ plan.description }}</p>
-
-            <ul class="mt-5 space-y-2">
-              <li v-for="item in plan.items" :key="item" class="flex items-start gap-2 text-sm text-slate-700">
-                <Check class="mt-0.5 h-4 w-4 shrink-0 text-teal-600" />
-                <span>{{ item }}</span>
-              </li>
-            </ul>
-
-            <RouterLink
-              class="pill-button mt-6 w-full justify-center"
-              :class="plan.highlighted ? 'bg-slate-900 text-white' : 'border border-slate-200 bg-white text-slate-700'"
-              :to="primaryLink"
+        <!-- How It Works Section -->
+        <section id="how" class="mt-16 scroll-mt-20">
+          <div class="grid gap-6 lg:grid-cols-2 lg:gap-8">
+            <div
+              class="rounded-3xl border border-white/8 bg-linear-to-br from-slate-900/80 to-slate-950/80 p-7 backdrop-blur-sm"
             >
-              {{ plan.cta }}
-            </RouterLink>
-          </article>
-        </div>
-      </section>
+              <div class="flex items-center gap-2 mb-6">
+                <LayoutGrid class="h-5 w-5 text-teal-400" />
+                <p
+                  class="text-sm font-semibold uppercase tracking-[0.2em] text-teal-400"
+                >
+                  {{ locale.t("nav.how") }}
+                </p>
+              </div>
+              <div class="space-y-4">
+                <div
+                  v-for="step in howItWorks"
+                  :key="step.step"
+                  class="group rounded-xl border border-white/6 bg-white/2 p-5 transition hover:border-teal-500/30 hover:bg-white/4"
+                >
+                  <div class="flex items-start gap-4">
+                    <div
+                      class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-teal-500/20 text-sm font-bold text-teal-300"
+                    >
+                      {{ step.step }}
+                    </div>
+                    <div>
+                      <h3 class="font-semibold text-white">
+                        {{ locale.t(step.titleKey) }}
+                      </h3>
+                      <p class="mt-1 text-sm text-slate-400">
+                        {{ locale.t(step.descriptionKey) }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-      <section class="grid gap-6 lg:grid-cols-[1fr_1fr]">
-        <div class="glass-card p-8">
-          <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">How it works</p>
-          <div class="mt-5 space-y-4">
-            <div class="soft-panel flex gap-4 p-5">
-              <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-950 text-white">1</div>
-              <div>
-                <h3 class="text-lg font-semibold text-slate-950">Connect your property data</h3>
-                <p class="mt-1 text-sm text-slate-600">Upload room details, policies, and FAQs into the knowledge base.</p>
+            <div
+              class="rounded-3xl border border-white/8 bg-linear-to-br from-slate-900/80 to-slate-950/80 p-7 backdrop-blur-sm"
+            >
+              <div class="flex items-center gap-2 mb-6">
+                <Star class="h-5 w-5 text-teal-400" />
+                <p
+                  class="text-sm font-semibold uppercase tracking-[0.2em] text-teal-400"
+                >
+                  {{ locale.t("outcomes.title") }}
+                </p>
               </div>
-            </div>
-            <div class="soft-panel flex gap-4 p-5">
-              <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-950 text-white">2</div>
-              <div>
-                <h3 class="text-lg font-semibold text-slate-950">Embed the concierge script</h3>
-                <p class="mt-1 text-sm text-slate-600">Paste one script tag on your site to launch the widget instantly.</p>
-              </div>
-            </div>
-            <div class="soft-panel flex gap-4 p-5">
-              <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-950 text-white">3</div>
-              <div>
-                <h3 class="text-lg font-semibold text-slate-950">Convert chats into bookings</h3>
-                <p class="mt-1 text-sm text-slate-600">Track leads, handoff moments, and booking intent in one dashboard.</p>
-              </div>
+              <ul class="space-y-3">
+                <li
+                  v-for="outcome in outcomes"
+                  :key="outcome"
+                  class="flex items-center gap-3 rounded-lg p-2 transition hover:bg-white/3"
+                >
+                  <CheckCircle2 class="h-5 w-5 text-teal-400 shrink-0" />
+                  <span class="text-slate-300">{{ locale.t(outcome) }}</span>
+                </li>
+              </ul>
+              <RouterLink
+                :to="primaryLink"
+                class="mt-8 inline-flex w-full items-center justify-center gap-2 rounded-full bg-linear-to-r from-teal-500 to-emerald-500 px-5 py-3 font-semibold text-white shadow-md shadow-teal-500/25 transition hover:brightness-110"
+              >
+                <Rocket class="h-4 w-4" />
+                {{ locale.t("cta.tryDashboard") }}
+              </RouterLink>
             </div>
           </div>
-        </div>
+        </section>
 
-        <div class="glass-card p-8">
-          <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Ready to launch?</p>
-          <h2 class="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
-            Turn your website into a 24/7 booking concierge
-          </h2>
-          <p class="mt-4 text-slate-600">
-            Start with the free setup flow, deploy your widget, and begin capturing high-intent leads today.
-          </p>
-          <div class="mt-7 flex flex-col gap-3 sm:flex-row">
-            <RouterLink class="pill-button bg-teal-600 text-white" :to="primaryLink">
-              <Rocket class="mr-2 h-4 w-4" />
-              Launch now
-            </RouterLink>
-            <a class="pill-button border border-slate-200 bg-white text-slate-700" href="#pricing">View plans</a>
-          </div>
-        </div>
-      </section>
-
-      <footer class="glass-card mt-2 px-6 py-8 sm:px-8">
-        <div class="grid gap-8 lg:grid-cols-[1.35fr_1fr_1fr_1fr]">
-          <div>
-            <div class="flex items-center gap-3">
-              <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-900 text-white">
-                <Sparkles class="h-4 w-4" />
-              </div>
-              <div>
-                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">AI Concierge Assistant</p>
-                <p class="text-sm text-slate-500">Hospitality conversion platform</p>
-              </div>
-            </div>
-            <p class="mt-4 max-w-md text-sm leading-6 text-slate-600">
-              Help hotels and boutique stays capture more bookings with AI chat, structured lead qualification, and seamless human handoff.
+        <!-- Pricing Section -->
+        <section id="pricing" class="mt-16 scroll-mt-20">
+          <div class="text-center mb-12">
+            <p
+              class="text-sm font-semibold uppercase tracking-[0.3em] text-teal-400"
+            >
+              {{ locale.t("nav.pricing") }}
+            </p>
+            <h2
+              class="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl"
+            >
+              {{ locale.t("pricing.title") }}
+            </h2>
+            <p class="mt-4 text-slate-400 max-w-2xl mx-auto">
+              {{ locale.t("pricing.subtitle") }}
             </p>
           </div>
-
-          <div>
-            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Product</p>
-            <ul class="mt-4 space-y-2 text-sm text-slate-700">
-              <li><a class="hover:text-slate-900" href="#features">Features</a></li>
-              <li><a class="hover:text-slate-900" href="#pricing">Pricing</a></li>
-              <li><RouterLink class="hover:text-slate-900" to="/signup">Start free setup</RouterLink></li>
-            </ul>
+          <div class="grid gap-5 md:grid-cols-3">
+            <article
+              v-for="plan in pricing"
+              :key="plan.nameKey"
+              class="relative rounded-2xl border p-6 transition hover:shadow-lg"
+              :class="
+                plan.featured
+                  ? 'border-teal-500/30 bg-linear-to-br from-teal-500/10 to-emerald-500/10 shadow-lg shadow-teal-500/20'
+                  : 'border-white/6 bg-slate-900/80 hover:border-teal-500/20'
+              "
+            >
+              <div
+                v-if="plan.featured"
+                class="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-linear-to-r from-teal-500 to-emerald-500 px-3 py-1 text-xs font-bold text-white shadow-md"
+              >
+                {{ locale.t("pricing.mostPopular") }}
+              </div>
+              <h3 class="text-xl font-bold text-white">
+                {{ locale.t(plan.nameKey) }}
+              </h3>
+              <div class="mt-4 flex items-baseline gap-1">
+                <span class="text-4xl font-bold text-white">{{
+                  plan.price || locale.t("pricing.custom")
+                }}</span>
+                <span class="text-slate-400">{{
+                  plan.periodKey ? locale.t(plan.periodKey) : ""
+                }}</span>
+              </div>
+              <p class="mt-3 text-sm text-slate-400">
+                {{ locale.t(plan.descriptionKey) }}
+              </p>
+              <RouterLink
+                :to="primaryLink"
+                class="mt-6 inline-flex w-full items-center justify-center rounded-full border px-5 py-2.5 text-sm font-semibold transition-all"
+                :class="
+                  plan.featured
+                    ? 'border-teal-400/30 bg-teal-500 text-white hover:bg-teal-600'
+                    : 'border-white/15 bg-white/5 text-slate-200 hover:bg-white/10'
+                "
+              >
+                {{ locale.t("cta.getStarted") }}
+              </RouterLink>
+            </article>
           </div>
+        </section>
 
-          <div>
-            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Company</p>
-            <ul class="mt-4 space-y-2 text-sm text-slate-700">
-              <li><a class="hover:text-slate-900" href="#roi">Why AI Concierge</a></li>
-              <li><RouterLink class="hover:text-slate-900" to="/login">Customer login</RouterLink></li>
-              <li><a class="hover:text-slate-900" href="mailto:sales@aiconciergeassistant.com">Contact sales</a></li>
-            </ul>
+        <!-- Footer -->
+        <footer
+          class="mt-16 rounded-3xl border border-white/6 bg-slate-900/50 px-8 py-8 backdrop-blur-sm"
+        >
+          <div
+            class="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div>
+              <div class="flex items-center gap-2">
+                <div
+                  class="flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-teal-500 to-emerald-500"
+                >
+                  <Sparkles class="h-4 w-4 text-white" />
+                </div>
+                <p class="text-sm font-semibold text-white">
+                  {{ locale.t("brand.name") }}
+                </p>
+              </div>
+              <p class="mt-2 text-xs text-slate-500">
+                © {{ new Date().getFullYear() }} {{ locale.t("footer.rights") }}
+              </p>
+            </div>
+            <div class="flex flex-wrap items-center gap-6 text-sm">
+              <a
+                href="#features"
+                class="text-slate-400 transition-all hover:text-teal-300"
+                >{{ locale.t("nav.features") }}</a
+              >
+              <a
+                href="#pricing"
+                class="text-slate-400 transition-all hover:text-teal-300"
+                >{{ locale.t("nav.pricing") }}</a
+              >
+              <RouterLink
+                to="/login"
+                class="text-slate-400 transition-all hover:text-teal-300"
+                >{{ locale.t("cta.login") }}</RouterLink
+              >
+              <RouterLink
+                :to="primaryLink"
+                class="rounded-full bg-linear-to-r from-teal-500 to-emerald-500 px-4 py-1.5 text-sm font-medium text-white transition hover:brightness-110"
+              >
+                {{
+                  auth.isAuthenticated
+                    ? locale.t("cta.dashboard")
+                    : locale.t("cta.start")
+                }}
+              </RouterLink>
+            </div>
           </div>
-
-          <div>
-            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Legal</p>
-            <ul class="mt-4 space-y-2 text-sm text-slate-700">
-              <li><a class="hover:text-slate-900" href="#">Privacy policy</a></li>
-              <li><a class="hover:text-slate-900" href="#">Terms of service</a></li>
-              <li><a class="hover:text-slate-900" href="#">Data processing</a></li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="mt-8 border-t border-slate-200 pt-5 text-sm text-slate-500">
-          © {{ new Date().getFullYear() }} AI Concierge Assistant. All rights reserved.
-        </div>
-      </footer>
+        </footer>
+      </div>
     </div>
   </div>
 </template>

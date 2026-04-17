@@ -4,9 +4,11 @@ import { onMounted } from "vue";
 import { useRouter } from "vue-router";
 import DashboardFrame from "../../components/dashboard/DashboardFrame.vue";
 import { useDashboardOps } from "../../composables/useDashboardOps";
+import { useLocaleStore } from "../../stores/locale";
 
 const router = useRouter();
 const dashboard = useDashboardOps();
+const locale = useLocaleStore();
 
 onMounted(async () => {
   await dashboard.initialize(router);
@@ -15,8 +17,8 @@ onMounted(async () => {
 
 <template>
   <DashboardFrame
-    title="Widget Setup"
-    subtitle="Copy your embed script and install the concierge on your website."
+    :title="locale.t('dashboard.widget.title')"
+    :subtitle="locale.t('dashboard.widget.subtitle')"
     :business-name="dashboard.business?.name ?? 'Dashboard'"
     :loading="dashboard.loading"
     :error="dashboard.error"
@@ -27,13 +29,13 @@ onMounted(async () => {
     <article class="rounded-2xl border border-white/10 bg-slate-900/70 p-6">
       <div class="flex items-start justify-between gap-4">
         <div>
-          <p class="text-sm text-slate-400">Embed widget</p>
-          <h2 class="mt-1 text-xl font-semibold text-white">Install on any website</h2>
+          <p class="text-sm text-slate-400">{{ locale.t("dashboard.widget.kicker") }}</p>
+          <h2 class="mt-1 text-xl font-semibold text-white">{{ locale.t("dashboard.widget.heading") }}</h2>
         </div>
         <Sparkles class="h-5 w-5 text-teal-300" />
       </div>
       <p class="mt-3 text-sm text-slate-300">
-        Paste this script into your footer or tag manager to load your concierge widget.
+        {{ locale.t("dashboard.widget.description") }}
       </p>
       <div class="mt-4 rounded-xl border border-white/10 bg-slate-950 p-3">
         <pre class="overflow-x-auto whitespace-pre-wrap text-xs text-cyan-100">{{ dashboard.widgetSnippet }}</pre>
@@ -44,24 +46,24 @@ onMounted(async () => {
         @click="dashboard.copySnippet"
       >
         <Copy class="h-4 w-4" />
-        Copy snippet
+        {{ locale.t("dashboard.widget.copy") }}
       </button>
     </article>
 
     <article class="mt-4 rounded-2xl border border-white/10 bg-linear-to-br from-teal-500/10 via-slate-900 to-indigo-500/10 p-6">
       <div class="flex items-start justify-between gap-4">
         <div>
-          <p class="text-sm text-teal-300/80">Architecture</p>
-          <h2 class="mt-1 text-xl font-semibold text-white">Production-ready MVP</h2>
+          <p class="text-sm text-teal-300/80">{{ locale.t("dashboard.widget.architecture") }}</p>
+          <h2 class="mt-1 text-xl font-semibold text-white">{{ locale.t("dashboard.widget.production") }}</h2>
         </div>
         <ShieldCheck class="h-5 w-5 text-teal-300" />
       </div>
       <ul class="mt-4 space-y-2 text-sm text-slate-300">
-        <li>Vue dashboard and hosted widget UI</li>
-        <li>Express + TypeScript API</li>
-        <li>Prisma + PostgreSQL multi-tenant model</li>
-        <li>RAG retrieval for grounded concierge answers</li>
-        <li>SMTP notifications for new booking leads</li>
+        <li>{{ locale.t("dashboard.widget.arch1") }}</li>
+        <li>{{ locale.t("dashboard.widget.arch2") }}</li>
+        <li>{{ locale.t("dashboard.widget.arch3") }}</li>
+        <li>{{ locale.t("dashboard.widget.arch4") }}</li>
+        <li>{{ locale.t("dashboard.widget.arch5") }}</li>
       </ul>
     </article>
   </DashboardFrame>

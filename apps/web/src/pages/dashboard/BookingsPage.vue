@@ -4,9 +4,11 @@ import { onMounted } from "vue";
 import { useRouter } from "vue-router";
 import DashboardFrame from "../../components/dashboard/DashboardFrame.vue";
 import { useDashboardOps } from "../../composables/useDashboardOps";
+import { useLocaleStore } from "../../stores/locale";
 
 const router = useRouter();
 const dashboard = useDashboardOps();
+const locale = useLocaleStore();
 
 onMounted(async () => {
   await dashboard.initialize(router);
@@ -15,8 +17,8 @@ onMounted(async () => {
 
 <template>
   <DashboardFrame
-    title="Bookings Pipeline"
-    subtitle="Track captured leads, booking statuses, and stay details."
+    :title="locale.t('dashboard.bookings.title')"
+    :subtitle="locale.t('dashboard.bookings.subtitle')"
     :business-name="dashboard.business?.name ?? 'Dashboard'"
     :loading="dashboard.loading"
     :error="dashboard.error"
@@ -27,8 +29,8 @@ onMounted(async () => {
     <article class="rounded-2xl border border-white/10 bg-slate-900/70 p-6">
       <div class="flex items-start justify-between gap-4">
         <div>
-          <p class="text-sm text-slate-400">Booking pipeline</p>
-          <h2 class="mt-1 text-xl font-semibold text-white">Captured leads and requests</h2>
+          <p class="text-sm text-slate-400">{{ locale.t("dashboard.bookings.kicker") }}</p>
+          <h2 class="mt-1 text-xl font-semibold text-white">{{ locale.t("dashboard.bookings.heading") }}</h2>
         </div>
         <CalendarDays class="h-5 w-5 text-teal-300" />
       </div>
@@ -53,20 +55,20 @@ onMounted(async () => {
           <div class="flex items-start justify-between gap-3">
             <div>
               <p class="text-sm font-semibold text-white">
-                {{ booking.guestName ?? booking.conversation?.visitorName ?? 'Guest lead' }}
+                {{ booking.guestName ?? booking.conversation?.visitorName ?? locale.t("dashboard.common.guestLead") }}
               </p>
               <p class="mt-1 text-xs text-slate-400">
-                {{ booking.email ?? booking.conversation?.visitorEmail ?? 'No email yet' }}
+                {{ booking.email ?? booking.conversation?.visitorEmail ?? locale.t("dashboard.bookings.noEmail") }}
               </p>
             </div>
             <span class="rounded-full bg-emerald-500/20 px-2.5 py-1 text-xs text-emerald-200">{{ booking.status }}</span>
           </div>
           <div class="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-400">
-            <p>Arrival: <span class="text-slate-200">{{ dashboard.formatDate(booking.arrivalDate) }}</span></p>
-            <p>Departure: <span class="text-slate-200">{{ dashboard.formatDate(booking.departureDate) }}</span></p>
+            <p>{{ locale.t("dashboard.bookings.arrival") }}: <span class="text-slate-200">{{ dashboard.formatDate(booking.arrivalDate) }}</span></p>
+            <p>{{ locale.t("dashboard.bookings.departure") }}: <span class="text-slate-200">{{ dashboard.formatDate(booking.departureDate) }}</span></p>
           </div>
           <p class="mt-2 text-xs text-slate-400">
-            Guests: {{ booking.guests ?? 'Unknown' }} · Room: {{ booking.roomType ?? 'Flexible' }}
+            {{ locale.t("dashboard.bookings.guests") }}: {{ booking.guests ?? locale.t("dashboard.bookings.unknown") }} · {{ locale.t("dashboard.bookings.room") }}: {{ booking.roomType ?? locale.t("dashboard.bookings.flexible") }}
           </p>
         </article>
       </div>
