@@ -4,6 +4,8 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
 import cors from "cors";
 import express, { NextFunction, Request, Response } from "express";
+import { cert, getApps, initializeApp } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 import helmet from "helmet";
 import jwt from "jsonwebtoken";
 import morgan from "morgan";
@@ -26,6 +28,16 @@ import { z } from "zod";
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   JWT_SECRET: z.string().min(16),
+  FIREBASE_PROJECT_ID: z.string().optional(),
+  FIREBASE_CLIENT_EMAIL: z.string().optional(),
+  FIREBASE_PRIVATE_KEY: z.string().optional(),
+  GROQ_API_KEY: z.string().optional(),
+  GROQ_BASE_URL: z.string().url().default("https://api.groq.com/openai/v1"),
+  GROQ_MODEL: z.string().default("llama-3.3-70b-versatile"),
+  XAI_API_KEY: z.string().optional(),
+  XAI_BASE_URL: z.string().url().default("https://api.x.ai/v1"),
+  XAI_MODEL: z.string().default("grok-3-mini"),
+  XAI_EMBEDDING_MODEL: z.string().default("grok-embedding-1"),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default("gpt-4.1-mini"),
   OPENAI_EMBEDDING_MODEL: z.string().default("text-embedding-3-small"),
@@ -39,6 +51,20 @@ const envSchema = z.object({
 });
 
 export const env = envSchema.parse(process.env);
+
+const firebaseAdminEnabled = Boolean(
+  env.FIREBASE_PROJECT_ID && env.FIREBASE_CLIENT_EMAIL && env.FIREBASE_PRIVATE_KEY,
+);
+
+if (firebaseAdminEnabled && getApps().length === 0) {
+  initializeApp({
+    credential: cert({
+      projectId: env.FIREBASE_PROJECT_ID,
+      clientEmail: env.FIREBASE_CLIENT_EMAIL,
+      privateKey: env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+    }),
+  });
+}
 
 const globalForPrisma = globalThis as typeof globalThis & {
   __aiConciergePool?: pg.Pool;
@@ -69,7 +95,34 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
 });
 
-const openai = env.OPENAI_API_KEY ? new OpenAI({ apiKey: env.OPENAI_API_KEY }) : null;
+const chatClient = env.GROQ_API_KEY
+  ? new OpenAI({
+      apiKey: env.GROQ_API_KEY,
+      baseURL: env.GROQ_BASE_URL,
+    })
+  : env.XAI_API_KEY
+  ? new OpenAI({
+      apiKey: env.XAI_API_KEY,
+      baseURL: env.XAI_BASE_URL,
+    })
+  : env.OPENAI_API_KEY
+    ? new OpenAI({ apiKey: env.OPENAI_API_KEY })
+    : null;
+const embeddingClient = env.XAI_API_KEY
+  ? new OpenAI({
+      apiKey: env.XAI_API_KEY,
+      baseURL: env.XAI_BASE_URL,
+    })
+  : env.OPENAI_API_KEY
+    ? new OpenAI({ apiKey: env.OPENAI_API_KEY })
+    : null;
+const aiProvider = env.GROQ_API_KEY
+  ? "groq"
+  : env.XAI_API_KEY
+    ? "xai-grok"
+    : env.OPENAI_API_KEY
+      ? "openai"
+      : "fallback-local";
 const transporter =
   env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS
     ? nodemailer.createTransport({
@@ -106,6 +159,15 @@ type RetrievedSnippet = {
   score: number;
 };
 
+type RegionalSettings = {
+  businessId: string;
+  defaultLanguage: "en-CA" | "fr-CA";
+  additionalLanguages: string[];
+  province: string;
+  timezone: string;
+  currency: "CAD";
+};
+
 declare global {
   namespace Express {
     interface Request {
@@ -136,7 +198,38 @@ const requireAuth = asyncHandler(async (req, res, next) => {
     req.auth = payload;
     next();
   } catch {
-    res.status(401).json({ error: "Invalid token." });
+    if (!firebaseAdminEnabled) {
+      res.status(401).json({ error: "Invalid token." });
+      return;
+    }
+
+    try {
+      const decoded = await verifyFirebaseIdToken(token);
+      const email = decoded.email?.toLowerCase();
+
+      if (!email) {
+        res.status(401).json({ error: "Firebase token is missing email." });
+        return;
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { email },
+      });
+
+      if (!user) {
+        res.status(401).json({ error: "No workspace is linked to this Firebase account." });
+        return;
+      }
+
+      req.auth = {
+        userId: user.id,
+        businessId: user.businessId,
+        role: user.role,
+      };
+      next();
+    } catch {
+      res.status(401).json({ error: "Invalid token." });
+    }
   }
 });
 
@@ -154,6 +247,18 @@ const loginSchema = z.object({
   password: z.string().min(8),
 });
 
+const firebaseSignupSchema = z.object({
+  idToken: z.string().min(1),
+  businessName: z.string().min(2),
+  businessEmail: z.string().email(),
+  websiteUrl: z.string().url().optional().or(z.literal("")),
+  name: z.string().min(2),
+});
+
+const firebaseLoginSchema = z.object({
+  idToken: z.string().min(1),
+});
+
 const widgetMessageSchema = z.object({
   conversationId: z.string().optional(),
   message: z.string().min(1),
@@ -163,6 +268,40 @@ const widgetMessageSchema = z.object({
 
 const adminReplySchema = z.object({
   content: z.string().min(1),
+});
+
+const supportReplySchema = z.object({
+  customerMessage: z.string().min(1),
+  channel: z.string().default("WEB_CHAT"),
+  priority: z.enum(["LOW", "NORMAL", "HIGH"]).default("NORMAL"),
+});
+
+const createShiftSchema = z.object({
+  teamMember: z.string().min(2),
+  role: z.string().min(2),
+  start: z.string().datetime(),
+  end: z.string().datetime(),
+  notes: z.string().optional(),
+});
+
+const createAutomationSchema = z.object({
+  title: z.string().min(2),
+  type: z.enum(["INVOICE_REMINDER", "INVENTORY_CHECK", "FOLLOW_UP", "OTHER"]),
+  schedule: z.enum(["DAILY", "WEEKLY", "MONTHLY", "MANUAL"]),
+  enabled: z.boolean().default(true),
+});
+
+const internalAssistantSchema = z.object({
+  question: z.string().min(1),
+  context: z.string().default("INTERNAL"),
+});
+
+const regionalSettingsSchema = z.object({
+  defaultLanguage: z.enum(["en-CA", "fr-CA"]),
+  additionalLanguages: z.array(z.string()).default([]),
+  province: z.string().min(2),
+  timezone: z.string().min(2),
+  currency: z.literal("CAD").default("CAD"),
 });
 
 const takeoverSchema = z.object({
@@ -219,6 +358,14 @@ async function uniqueBusinessSlug(name: string) {
 
 function signToken(user: AuthToken) {
   return jwt.sign(user, env.JWT_SECRET, { expiresIn: "7d" });
+}
+
+async function verifyFirebaseIdToken(idToken: string) {
+  if (!firebaseAdminEnabled) {
+    throw new Error("Firebase Admin SDK is not configured.");
+  }
+
+  return getAuth().verifyIdToken(idToken);
 }
 
 function toEmbeddingArray(value: unknown): number[] {
@@ -311,16 +458,20 @@ function firstParam(value: string | string[] | undefined) {
 }
 
 async function embedText(text: string) {
-  if (!openai) {
+  if (!embeddingClient) {
     return fallbackEmbedding(text);
   }
 
-  const response = await openai.embeddings.create({
-    model: env.OPENAI_EMBEDDING_MODEL,
-    input: text,
-  });
+  try {
+    const response = await embeddingClient.embeddings.create({
+      model: env.XAI_API_KEY ? env.XAI_EMBEDDING_MODEL : env.OPENAI_EMBEDDING_MODEL,
+      input: text,
+    });
 
-  return response.data[0]?.embedding ?? fallbackEmbedding(text);
+    return response.data[0]?.embedding ?? fallbackEmbedding(text);
+  } catch {
+    return fallbackEmbedding(text);
+  }
 }
 
 function chunkText(content: string, maxLength = 600, overlap = 120) {
@@ -451,7 +602,7 @@ async function generateReply(options: {
 }) {
   const intent = detectIntent(options.userMessage);
 
-  if (!openai) {
+  if (!chatClient) {
     return buildFallbackReply(options.businessName, options.snippets, intent);
   }
 
@@ -459,41 +610,45 @@ async function generateReply(options: {
     ? options.snippets.map((snippet, index) => `[${index + 1}] ${snippet.content}`).join("\n")
     : "No relevant snippets were found.";
 
-  const completion = await openai.chat.completions.create({
-    model: env.OPENAI_MODEL,
-    temperature: 0.25,
-    messages: [
-      {
-        role: "system",
-        content: [
-          `You are an AI concierge for ${options.businessName}, a Canadian hospitality business.`,
-          "Only answer with information grounded in the provided knowledge snippets.",
-          "If the knowledge base does not contain the answer, say so clearly and offer to capture the guest's dates, email, and preferences for a human follow-up.",
-          "Your goal is to increase bookings, qualify leads, and sound polished and trustworthy.",
-          `Business support email: ${options.businessEmail}.`,
-          `Default welcome message: ${options.welcomeMessage}`,
-        ].join("\n"),
-      },
-      ...options.history.slice(-8).map((message) => ({
-        role: message.role === MessageRole.USER ? ("user" as const) : ("assistant" as const),
-        content: message.content,
-      })),
-      {
-        role: "user",
-        content: [
-          `Knowledge snippets:\n${knowledgeBlock}`,
-          `Visitor message:\n${options.userMessage}`,
-          `Detected intent: ${intent}`,
-          "Respond in a concise, premium, conversion-friendly tone. Mention uncertainty when the answer is not covered by the snippets.",
-        ].join("\n\n"),
-      },
-    ],
-  });
+  try {
+    const completion = await chatClient.chat.completions.create({
+      model: env.GROQ_API_KEY ? env.GROQ_MODEL : env.XAI_API_KEY ? env.XAI_MODEL : env.OPENAI_MODEL,
+      temperature: 0.25,
+      messages: [
+        {
+          role: "system",
+          content: [
+            `You are an AI concierge for ${options.businessName}, a Canadian hospitality business.`,
+            "Only answer with information grounded in the provided knowledge snippets.",
+            "If the knowledge base does not contain the answer, say so clearly and offer to capture the guest's dates, email, and preferences for a human follow-up.",
+            "Your goal is to increase bookings, qualify leads, and sound polished and trustworthy.",
+            `Business support email: ${options.businessEmail}.`,
+            `Default welcome message: ${options.welcomeMessage}`,
+          ].join("\n"),
+        },
+        ...options.history.slice(-8).map((message) => ({
+          role: message.role === MessageRole.USER ? ("user" as const) : ("assistant" as const),
+          content: message.content,
+        })),
+        {
+          role: "user",
+          content: [
+            `Knowledge snippets:\n${knowledgeBlock}`,
+            `Visitor message:\n${options.userMessage}`,
+            `Detected intent: ${intent}`,
+            "Respond in a concise, premium, conversion-friendly tone. Mention uncertainty when the answer is not covered by the snippets.",
+          ].join("\n\n"),
+        },
+      ],
+    });
 
-  return (
-    completion.choices[0]?.message?.content?.trim() ??
-    buildFallbackReply(options.businessName, options.snippets, intent)
-  );
+    return (
+      completion.choices[0]?.message?.content?.trim() ??
+      buildFallbackReply(options.businessName, options.snippets, intent)
+    );
+  } catch {
+    return buildFallbackReply(options.businessName, options.snippets, intent);
+  }
 }
 
 async function sendNotificationEmail(options: {
@@ -531,8 +686,79 @@ async function trackEvent(
   });
 }
 
-function formatWidgetSnippet(slug: string) {
-  return `<script src="${env.WEB_APP_URL}/widget.js" data-business="${slug}" data-host="${env.WEB_APP_URL}" data-api="${env.API_URL}"></script>`;
+function stripTrailingSlash(value: string) {
+  return value.replace(/\/+$/, "");
+}
+
+function isLocalhostUrl(value: string) {
+  return /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/i.test(stripTrailingSlash(value));
+}
+
+function resolveWidgetSnippetUrls(req: Request) {
+  const requestOrigin = req.get("origin");
+  const fallbackOrigin = req.get("x-forwarded-proto") && req.get("x-forwarded-host")
+    ? `${req.get("x-forwarded-proto")}://${req.get("x-forwarded-host")}`
+    : req.protocol && req.get("host")
+      ? `${req.protocol}://${req.get("host")}`
+      : undefined;
+
+  const preferredOrigin = requestOrigin ?? fallbackOrigin;
+  const useRequestOrigin = preferredOrigin ? !isLocalhostUrl(preferredOrigin) : false;
+
+  const appBaseUrl = useRequestOrigin
+    ? stripTrailingSlash(preferredOrigin!)
+    : stripTrailingSlash(env.WEB_APP_URL);
+
+  const apiBaseUrl = isLocalhostUrl(env.API_URL)
+    ? `${appBaseUrl}/api`
+    : stripTrailingSlash(env.API_URL);
+
+  return { appBaseUrl, apiBaseUrl };
+}
+
+function formatWidgetSnippet(slug: string, urls: { appBaseUrl: string; apiBaseUrl: string }) {
+  return `<script src="${urls.appBaseUrl}/widget.js" data-business="${slug}" data-host="${urls.appBaseUrl}" data-api="${urls.apiBaseUrl}"></script>`;
+}
+
+async function getRegionalSettingsForBusiness(businessId: string): Promise<RegionalSettings> {
+  const existing = await prisma.regionalSettings.findUnique({
+    where: { businessId },
+  });
+
+  if (existing) {
+    return {
+      businessId: existing.businessId,
+      defaultLanguage: existing.defaultLanguage as RegionalSettings["defaultLanguage"],
+      additionalLanguages: Array.isArray(existing.additionalLanguages)
+        ? existing.additionalLanguages.map((item) => String(item))
+        : ["fr-CA"],
+      province: existing.province,
+      timezone: existing.timezone,
+      currency: existing.currency as "CAD",
+    };
+  }
+
+  const created = await prisma.regionalSettings.create({
+    data: {
+      businessId,
+      defaultLanguage: "en-CA",
+      additionalLanguages: ["fr-CA"],
+      province: "ON",
+      timezone: "America/Toronto",
+      currency: "CAD",
+    },
+  });
+
+  return {
+    businessId: created.businessId,
+    defaultLanguage: created.defaultLanguage as RegionalSettings["defaultLanguage"],
+    additionalLanguages: Array.isArray(created.additionalLanguages)
+      ? created.additionalLanguages.map((item) => String(item))
+      : ["fr-CA"],
+    province: created.province,
+    timezone: created.timezone,
+    currency: created.currency as "CAD",
+  };
 }
 
 async function maybeUpsertBooking(options: {
@@ -644,9 +870,130 @@ app.get("/api/health", (_req, res) => {
   res.json({
     status: "ok",
     service: "ai-concierge-api",
-    aiProvider: openai ? "openai" : "fallback-local",
+    aiProvider,
+    embeddingProvider: embeddingClient ? (env.XAI_API_KEY ? "xai-grok" : "openai") : "fallback-local",
   });
 });
+
+app.post(
+  "/api/auth/firebase/signup",
+  asyncHandler(async (req, res) => {
+    const payload = firebaseSignupSchema.parse(req.body);
+    const decoded = await verifyFirebaseIdToken(payload.idToken);
+    const email = decoded.email?.toLowerCase();
+
+    if (!email) {
+      res.status(400).json({ error: "Firebase account is missing an email." });
+      return;
+    }
+
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (existingUser) {
+      res.status(409).json({ error: "An account already exists for this Firebase email." });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(decoded.uid, 10);
+    const slug = await uniqueBusinessSlug(payload.businessName);
+    const business = await prisma.business.create({
+      data: {
+        name: payload.businessName,
+        slug,
+        email: payload.businessEmail.toLowerCase(),
+        websiteUrl: payload.websiteUrl || null,
+        users: {
+          create: {
+            name: payload.name,
+            email,
+            passwordHash,
+            role: UserRole.OWNER,
+          },
+        },
+      },
+      include: {
+        users: true,
+      },
+    });
+
+    const user = business.users[0];
+    const token = signToken({
+      userId: user.id,
+      businessId: business.id,
+      role: user.role,
+    });
+
+    res.status(201).json({
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+      business: {
+        id: business.id,
+        name: business.name,
+        slug: business.slug,
+        email: business.email,
+        websiteUrl: business.websiteUrl,
+        brandColor: business.brandColor,
+        welcomeMessage: business.welcomeMessage,
+      },
+    });
+  }),
+);
+
+app.post(
+  "/api/auth/firebase/login",
+  asyncHandler(async (req, res) => {
+    const payload = firebaseLoginSchema.parse(req.body);
+    const decoded = await verifyFirebaseIdToken(payload.idToken);
+    const email = decoded.email?.toLowerCase();
+
+    if (!email) {
+      res.status(400).json({ error: "Firebase account is missing an email." });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: { business: true },
+    });
+
+    if (!user) {
+      res.status(404).json({ error: "No workspace found for this Firebase account. Please sign up first." });
+      return;
+    }
+
+    const token = signToken({
+      userId: user.id,
+      businessId: user.businessId,
+      role: user.role,
+    });
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+      business: {
+        id: user.business.id,
+        name: user.business.name,
+        slug: user.business.slug,
+        email: user.business.email,
+        websiteUrl: user.business.websiteUrl,
+        brandColor: user.business.brandColor,
+        welcomeMessage: user.business.welcomeMessage,
+      },
+    });
+  }),
+);
 
 app.post(
   "/api/auth/signup",
@@ -1126,6 +1473,7 @@ app.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     const { businessId } = req.auth!;
+    const widgetUrls = resolveWidgetSnippetUrls(req);
     const business = await prisma.business.findUnique({
       where: { id: businessId },
     });
@@ -1137,7 +1485,7 @@ app.get(
 
     res.json({
       business,
-      widgetSnippet: formatWidgetSnippet(business.slug),
+      widgetSnippet: formatWidgetSnippet(business.slug, widgetUrls),
     });
   }),
 );
@@ -1159,6 +1507,252 @@ app.put(
     });
 
     res.json({ business });
+  }),
+);
+
+app.post(
+  "/api/admin/support/reply",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.auth!;
+    const payload = supportReplySchema.parse(req.body);
+
+    const snippets = await retrieveKnowledge(businessId, payload.customerMessage);
+    const business = await prisma.business.findUnique({ where: { id: businessId } });
+
+    const reply = await generateReply({
+      businessName: business?.name ?? "Business",
+      businessEmail: business?.email ?? "support@example.com",
+      welcomeMessage: business?.welcomeMessage ?? "Welcome",
+      userMessage: payload.customerMessage,
+      snippets,
+      history: [],
+    });
+
+    res.json({
+      suggestedReply: reply,
+      priority: payload.priority,
+      channel: payload.channel,
+      groundingSnippetCount: snippets.length,
+    });
+  }),
+);
+
+app.get(
+  "/api/admin/shifts",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.auth!;
+    const shifts = await prisma.shift.findMany({
+      where: { businessId },
+      orderBy: { start: "asc" },
+    });
+    res.json({ shifts });
+  }),
+);
+
+app.post(
+  "/api/admin/shifts",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.auth!;
+    const payload = createShiftSchema.parse(req.body);
+    const shift = await prisma.shift.create({
+      data: {
+        businessId,
+        teamMember: payload.teamMember,
+        role: payload.role,
+        start: new Date(payload.start),
+        end: new Date(payload.end),
+        notes: payload.notes,
+      },
+    });
+    res.status(201).json({ shift });
+  }),
+);
+
+app.get(
+  "/api/admin/internal-assistant",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.auth!;
+    const question = String(req.query.question ?? "").trim();
+    if (!question) {
+      res.status(400).json({ error: "Question is required." });
+      return;
+    }
+
+    const payload = internalAssistantSchema.parse({ question, context: String(req.query.context ?? "INTERNAL") });
+    const snippets = await retrieveKnowledge(businessId, payload.question);
+    const business = await prisma.business.findUnique({ where: { id: businessId } });
+
+    const answer = await generateReply({
+      businessName: business?.name ?? "Business",
+      businessEmail: business?.email ?? "support@example.com",
+      welcomeMessage: business?.welcomeMessage ?? "Welcome",
+      userMessage: payload.question,
+      snippets,
+      history: [],
+    });
+
+    res.json({
+      answer,
+      usedKnowledgeSnippets: snippets.map((snippet) => ({
+        id: snippet.id,
+        score: Number(snippet.score.toFixed(3)),
+      })),
+    });
+  }),
+);
+
+app.get(
+  "/api/admin/automations",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.auth!;
+    const automations = await prisma.automation.findMany({
+      where: { businessId },
+      orderBy: { createdAt: "desc" },
+    });
+    res.json({ automations });
+  }),
+);
+
+app.post(
+  "/api/admin/automations",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.auth!;
+    const payload = createAutomationSchema.parse(req.body);
+    const automation = await prisma.automation.create({
+      data: {
+        businessId,
+        title: payload.title,
+        type: payload.type,
+        schedule: payload.schedule,
+        enabled: payload.enabled,
+      },
+    });
+    res.status(201).json({ automation });
+  }),
+);
+
+app.post(
+  "/api/admin/automations/:id/run",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.auth!;
+    const automationId = firstParam(req.params.id);
+    if (!automationId) {
+      res.status(400).json({ error: "Automation id is required." });
+      return;
+    }
+
+    const item = await prisma.automation.findFirst({
+      where: {
+        id: automationId,
+        businessId,
+      },
+    });
+    if (!item) {
+      res.status(404).json({ error: "Automation not found." });
+      return;
+    }
+
+    const updated = await prisma.automation.update({
+      where: { id: item.id },
+      data: {
+        lastRunAt: new Date(),
+      },
+    });
+    res.json({ automation: updated, result: `${updated.type} executed.` });
+  }),
+);
+
+app.get(
+  "/api/admin/reports/summary",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.auth!;
+    const period = String(req.query.period ?? "daily");
+    const now = new Date();
+    const from = new Date(now);
+    if (period === "weekly") {
+      from.setDate(now.getDate() - 7);
+    } else {
+      from.setDate(now.getDate() - 1);
+    }
+
+    const [conversations, bookings] = await Promise.all([
+      prisma.conversation.findMany({
+        where: {
+          businessId,
+          createdAt: { gte: from },
+        },
+      }),
+      prisma.booking.findMany({
+        where: {
+          businessId,
+          createdAt: { gte: from },
+        },
+      }),
+    ]);
+
+    const summary = {
+      period,
+      from: from.toISOString(),
+      to: now.toISOString(),
+      totalConversations: conversations.length,
+      humanHandoffs: conversations.filter((conversation) => conversation.status === ConversationStatus.HUMAN)
+        .length,
+      qualifiedLeads: conversations.filter((conversation) => conversation.leadStatus !== LeadStatus.NEW).length,
+      bookingsCaptured: bookings.length,
+      bookingStatuses: bookings.reduce<Record<string, number>>((acc, booking) => {
+        acc[booking.status] = (acc[booking.status] ?? 0) + 1;
+        return acc;
+      }, {}),
+    };
+
+    res.json({ summary });
+  }),
+);
+
+app.get(
+  "/api/admin/regional-settings",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.auth!;
+    const settings = await getRegionalSettingsForBusiness(businessId);
+    res.json({ settings });
+  }),
+);
+
+app.put(
+  "/api/admin/regional-settings",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.auth!;
+    const payload = regionalSettingsSchema.parse(req.body);
+    await prisma.regionalSettings.upsert({
+      where: { businessId },
+      create: {
+        businessId,
+        defaultLanguage: payload.defaultLanguage,
+        additionalLanguages: payload.additionalLanguages,
+        province: payload.province,
+        timezone: payload.timezone,
+        currency: payload.currency,
+      },
+      update: {
+        defaultLanguage: payload.defaultLanguage,
+        additionalLanguages: payload.additionalLanguages,
+        province: payload.province,
+        timezone: payload.timezone,
+        currency: payload.currency,
+      },
+    });
+    const settings: RegionalSettings = { businessId, ...payload };
+    res.json({ settings });
   }),
 );
 
@@ -1406,7 +2000,10 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   });
 });
 
-if (process.env.VERCEL !== "1") {
+const isVercelRuntime = process.env.VERCEL === "1";
+const isRailwayRuntime = Boolean(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID);
+
+if (!isVercelRuntime || isRailwayRuntime) {
   const port = Number(process.env.PORT ?? 4000);
   app.listen(port, () => {
     console.info(`AI Concierge API listening on http://localhost:${port}`);

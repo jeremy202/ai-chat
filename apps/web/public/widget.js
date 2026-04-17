@@ -2,15 +2,33 @@
   var existing = document.getElementById('ai-concierge-assistant-widget-launcher');
   if (existing) return;
 
-  var script = document.currentScript;
+  function resolveScriptTag() {
+    if (document.currentScript) return document.currentScript;
+    var scripts = document.getElementsByTagName('script');
+    for (var i = scripts.length - 1; i >= 0; i -= 1) {
+      var candidate = scripts[i];
+      var src = candidate && candidate.getAttribute && candidate.getAttribute('src');
+      if (!src) continue;
+      if (src.indexOf('widget.js') !== -1 || src.indexOf('/widget.js') !== -1) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  var script = resolveScriptTag();
   var businessSlug =
     (script && (script.getAttribute('data-business') || script.getAttribute('data-business-slug'))) ||
     (script && script.dataset && (script.dataset.business || script.dataset.businessSlug)) ||
     'demo-hospitality-business';
   var baseUrl =
     (script && (script.getAttribute('data-host') || script.getAttribute('data-base-url'))) ||
-    (script && script.src && script.src.replace(/\/widget\.js.*$/, '')) ||
+    (script && script.src && (function () { try { return new URL(script.src).origin; } catch (_) { return script.src.replace(/\/widget\.js.*$/, ''); } })()) ||
     window.location.origin;
+  var apiBase =
+    (script && script.getAttribute('data-api')) ||
+    (script && script.dataset && script.dataset.api) ||
+    baseUrl.replace(/\/$/, '') + '/api';
   var position =
     (script && script.getAttribute('data-position')) ||
     (script && script.dataset && script.dataset.position) ||
@@ -50,7 +68,12 @@
   var iframe = document.createElement('iframe');
   iframe.title = 'AI Concierge Assistant';
   iframe.allow = 'clipboard-write';
-  iframe.src = baseUrl.replace(/\/$/, '') + '/widget/' + encodeURIComponent(businessSlug);
+  iframe.src =
+    baseUrl.replace(/\/$/, '') +
+    '/widget/' +
+    encodeURIComponent(businessSlug) +
+    '?apiBase=' +
+    encodeURIComponent(apiBase.replace(/\/$/, ''));
 
   Object.assign(iframe.style, {
     position: 'fixed',
@@ -90,11 +113,46 @@
   });
 
   window.addEventListener('message', function (event) {
+    if (event.source !== iframe.contentWindow) return;
     if (event.data && event.data.type === 'AI_CONCIERGE_CLOSE_WIDGET') {
       closeWidget();
     }
   });
 
-  document.body.appendChild(launcher);
-  document.body.appendChild(iframe);
+  function mount() {
+    if (!document.body) return;
+
+    var host = document.createElement('div');
+    host.id = 'ai-concierge-assistant-widget-host';
+    host.style.position = 'fixed';
+    host.style.inset = '0';
+    host.style.pointerEvents = 'none';
+    host.style.zIndex = '2147483644';
+
+    var shadow = host.attachShadow ? host.attachShadow({ mode: 'open' }) : null;
+    if (shadow) {
+      var wrapper = document.createElement('div');
+      wrapper.style.position = 'fixed';
+      wrapper.style.inset = '0';
+      wrapper.style.pointerEvents = 'none';
+      wrapper.appendChild(iframe);
+      wrapper.appendChild(launcher);
+      launcher.style.pointerEvents = 'auto';
+      iframe.style.pointerEvents = 'auto';
+      shadow.appendChild(wrapper);
+      document.body.appendChild(host);
+      return;
+    }
+
+    launcher.style.pointerEvents = 'auto';
+    iframe.style.pointerEvents = 'auto';
+    document.body.appendChild(launcher);
+    document.body.appendChild(iframe);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', mount, { once: true });
+  } else {
+    mount();
+  }
 })();
