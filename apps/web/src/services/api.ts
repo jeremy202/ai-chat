@@ -15,7 +15,7 @@ function resolveApiBaseUrl() {
   }
 
   if (import.meta.env.DEV) {
-    return "http://localhost:4000";
+    return "http://localhost:8080";
   }
 
   return "/api";

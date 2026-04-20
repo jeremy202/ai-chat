@@ -53,7 +53,7 @@ const envSchema = z.object({
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().default("AI Concierge <noreply@aiconciergeassistant.com>"),
   WEB_APP_URL: optionalUrlWithDefault("http://localhost:5173"),
-  API_URL: optionalUrlWithDefault("http://localhost:4000"),
+  API_URL: optionalUrlWithDefault("http://localhost:8080"),
 });
 
 export const env = envSchema.parse(process.env);
@@ -103,22 +103,22 @@ const upload = multer({
 
 const chatClient = env.GROQ_API_KEY
   ? new OpenAI({
-      apiKey: env.GROQ_API_KEY,
-      baseURL: env.GROQ_BASE_URL,
-    })
+    apiKey: env.GROQ_API_KEY,
+    baseURL: env.GROQ_BASE_URL,
+  })
   : env.XAI_API_KEY
-  ? new OpenAI({
+    ? new OpenAI({
       apiKey: env.XAI_API_KEY,
       baseURL: env.XAI_BASE_URL,
     })
-  : env.OPENAI_API_KEY
-    ? new OpenAI({ apiKey: env.OPENAI_API_KEY })
-    : null;
+    : env.OPENAI_API_KEY
+      ? new OpenAI({ apiKey: env.OPENAI_API_KEY })
+      : null;
 const embeddingClient = env.XAI_API_KEY
   ? new OpenAI({
-      apiKey: env.XAI_API_KEY,
-      baseURL: env.XAI_BASE_URL,
-    })
+    apiKey: env.XAI_API_KEY,
+    baseURL: env.XAI_BASE_URL,
+  })
   : env.OPENAI_API_KEY
     ? new OpenAI({ apiKey: env.OPENAI_API_KEY })
     : null;
@@ -132,14 +132,14 @@ const aiProvider = env.GROQ_API_KEY
 const transporter =
   env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS
     ? nodemailer.createTransport({
-        host: env.SMTP_HOST,
-        port: env.SMTP_PORT,
-        secure: env.SMTP_PORT === 465,
-        auth: {
-          user: env.SMTP_USER,
-          pass: env.SMTP_PASS,
-        },
-      })
+      host: env.SMTP_HOST,
+      port: env.SMTP_PORT,
+      secure: env.SMTP_PORT === 465,
+      auth: {
+        user: env.SMTP_USER,
+        pass: env.SMTP_PASS,
+      },
+    })
     : null;
 
 type AuthToken = {
@@ -186,9 +186,9 @@ const asyncHandler =
   (
     handler: (req: Request, res: Response, next: NextFunction) => Promise<unknown>,
   ) =>
-  (req: Request, res: Response, next: NextFunction) => {
-    Promise.resolve(handler(req, res, next)).catch(next);
-  };
+    (req: Request, res: Response, next: NextFunction) => {
+      Promise.resolve(handler(req, res, next)).catch(next);
+    };
 
 const requireAuth = asyncHandler(async (req, res, next) => {
   const header = req.headers.authorization;
@@ -838,16 +838,16 @@ async function maybeUpsertBooking(options: {
 
   const booking = existing
     ? await prisma.booking.update({
-        where: { id: existing.id },
-        data: bookingData,
-      })
+      where: { id: existing.id },
+      data: bookingData,
+    })
     : await prisma.booking.create({
-        data: {
-          businessId: options.businessId,
-          conversationId: options.conversationId,
-          ...bookingData,
-        },
-      });
+      data: {
+        businessId: options.businessId,
+        conversationId: options.conversationId,
+        ...bookingData,
+      },
+    });
 
   const nextLeadStatus =
     options.signals.arrivalDate || options.signals.departureDate
@@ -2206,7 +2206,7 @@ const isVercelRuntime = process.env.VERCEL === "1";
 const isRailwayRuntime = Boolean(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID);
 
 if (!isVercelRuntime || isRailwayRuntime) {
-  const port = Number(process.env.PORT ?? 4000);
+  const port = Number(process.env.PORT ?? 8080);
   app.listen(port, () => {
     console.info(`AI Concierge API listening on http://localhost:${port}`);
   });
