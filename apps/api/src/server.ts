@@ -601,6 +601,12 @@ function hasLeadSignal(message: string, signals: BookingSignals) {
 
 async function retrieveKnowledge(businessId: string, query: string) {
   const queryEmbedding = await embedText(query);
+  const normalizedQuery = query.toLowerCase();
+  const pricingIntent = /(price|pricing|rate|cost|fee|discount|cad|\$)/.test(normalizedQuery);
+  const policyIntent =
+    /(policy|pet|cancel|cancellation|check-in|check in|check-out|checkout|parking|refund|child|children)/.test(
+      normalizedQuery,
+    );
   const queryTerms = new Set(
     query
       .toLowerCase()
@@ -615,8 +621,18 @@ async function retrieveKnowledge(businessId: string, query: string) {
       content: true,
       embedding: true,
       metadata: true,
+      knowledgeItem: {
+        select: {
+          updatedAt: true,
+        },
+      },
     },
   });
+
+  const newestTimestamp = chunks.reduce(
+    (latest, chunk) => Math.max(latest, new Date(chunk.knowledgeItem.updatedAt).getTime()),
+    0,
+  );
 
   const ranked = chunks
     .map<RetrievedSnippet>((chunk) => ({
@@ -641,7 +657,20 @@ async function retrieveKnowledge(businessId: string, query: string) {
         );
         const overlapCount = [...queryTerms].filter((term) => contentTerms.has(term)).length;
         const lexical = queryTerms.size > 0 ? overlapCount / queryTerms.size : 0;
-        return semantic * 0.8 + lexical * 0.2;
+        const metadata =
+          chunk.metadata && typeof chunk.metadata === "object" && !Array.isArray(chunk.metadata)
+            ? (chunk.metadata as Record<string, unknown>)
+            : {};
+        const sourceType = String(metadata.sourceType ?? "").toUpperCase();
+        const sourceBoost =
+          (pricingIntent && sourceType === "PRICING" ? 0.05 : 0) +
+          (policyIntent && (sourceType === "POLICY" || sourceType === "FAQ") ? 0.04 : 0);
+
+        const updatedAtMs = new Date(chunk.knowledgeItem.updatedAt).getTime();
+        const recencyBoost =
+          newestTimestamp > 0 ? Math.max(0, Math.min(0.05, ((updatedAtMs / newestTimestamp) - 0.96) * 1.2)) : 0;
+
+        return semantic * 0.72 + lexical * 0.23 + sourceBoost + recencyBoost;
       })(),
     }))
     .sort((left, right) => right.score - left.score)
