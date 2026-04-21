@@ -20,6 +20,41 @@ const isSending = ref(false)
 const conversationId = ref<string>()
 const loadError = ref('')
 
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function formatAssistantMessage(content: string) {
+  const safe = escapeHtml(content.trim())
+  const withBold = safe.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+  const withInlineCode = withBold.replace(/`([^`]+)`/g, '<code>$1</code>')
+
+  const sections = withInlineCode
+    .split(/\n{2,}/)
+    .map((section) => section.trim())
+    .filter(Boolean)
+    .map((section) => {
+      const lines = section.split('\n').map((line) => line.trim())
+      const isList = lines.every((line) => /^[-*]\s+/.test(line))
+      if (isList) {
+        const items = lines
+          .map((line) => line.replace(/^[-*]\s+/, ''))
+          .map((line) => `<li>${line}</li>`)
+          .join('')
+        return `<ul>${items}</ul>`
+      }
+
+      return `<p>${section.replace(/\n/g, '<br />')}</p>`
+    })
+
+  return sections.join('')
+}
+
 function applyConversation(conversation: Conversation) {
   conversationId.value = conversation.id
   messages.value = conversation.messages
@@ -173,7 +208,15 @@ function closeWidget() {
                 : 'border border-white/10 bg-white/5 text-slate-100'
             "
           >
-            {{ message.content }}
+            <template v-if="message.role === 'assistant'">
+              <div
+                class="widget-rich-text space-y-2"
+                v-html="formatAssistantMessage(message.content)"
+              />
+            </template>
+            <template v-else>
+              {{ message.content }}
+            </template>
           </div>
         </div>
 
@@ -211,3 +254,29 @@ function closeWidget() {
     </div>
   </main>
 </template>
+
+<style scoped>
+.widget-rich-text :deep(p) {
+  margin: 0;
+}
+
+.widget-rich-text :deep(ul) {
+  margin: 0;
+  padding-left: 1rem;
+}
+
+.widget-rich-text :deep(li) {
+  margin: 0.1rem 0;
+}
+
+.widget-rich-text :deep(strong) {
+  font-weight: 700;
+}
+
+.widget-rich-text :deep(code) {
+  border-radius: 0.375rem;
+  background: rgba(15, 23, 42, 0.75);
+  padding: 0.05rem 0.3rem;
+  font-size: 0.78rem;
+}
+</style>

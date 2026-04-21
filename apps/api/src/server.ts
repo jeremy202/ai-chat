@@ -534,6 +534,14 @@ function chunkText(content: string, maxLength = 600, overlap = 120) {
     return [];
   }
 
+  const sectionChunks = normalized
+    .split(/\n{2,}/)
+    .map((section) => section.trim())
+    .filter((section) => section.length > 0 && section.length <= maxLength);
+  if (sectionChunks.length >= 4) {
+    return sectionChunks;
+  }
+
   const chunks: string[] = [];
   let cursor = 0;
 
@@ -555,6 +563,10 @@ function chunkText(content: string, maxLength = 600, overlap = 120) {
 
 function detectIntent(message: string) {
   const normalized = message.toLowerCase();
+
+  if (/(refund|chargeback|dispute|money back|billing issue|cancel and refund)/.test(normalized)) {
+    return "refund_dispute";
+  }
 
   if (/(book|reserve|availability|available|check-in|check out|dates|stay|night)/.test(normalized)) {
     return "booking_request";
@@ -682,17 +694,29 @@ async function retrieveKnowledge(businessId: string, query: string) {
 
 function buildFallbackReply(
   businessName: string,
+  businessEmail: string,
   snippets: RetrievedSnippet[],
   intent: string,
   handoffPrompt = true,
 ) {
+  if (intent === "refund_dispute") {
+    return `I can help escalate refund and billing disputes to hotel staff right away. Please share your booking name, reservation number, and the issue details, or contact ${businessEmail} for priority support.`;
+  }
+
   if (snippets.length === 0) {
     return `I do not see that detail in ${businessName}'s knowledge base yet. I can still help collect your dates, guest count, and email so the team can follow up quickly.`;
   }
 
   const summary = snippets
     .slice(0, 3)
-    .map((snippet) => `- ${snippet.content}`)
+    .map((snippet) => {
+      const compact = snippet.content
+        .replace(/\n+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      const preview = compact.length > 220 ? `${compact.slice(0, 220).trim()}...` : compact;
+      return `- ${preview}`;
+    })
     .join("\n");
 
   const cta =
@@ -714,7 +738,7 @@ async function generateReply(options: {
   const intent = detectIntent(options.userMessage);
 
   if (!chatClient) {
-    return buildFallbackReply(options.businessName, options.snippets, intent);
+    return buildFallbackReply(options.businessName, options.businessEmail, options.snippets, intent);
   }
 
   const knowledgeBlock = options.snippets.length
@@ -763,10 +787,10 @@ async function generateReply(options: {
 
     return (
       completion.choices[0]?.message?.content?.trim() ??
-      buildFallbackReply(options.businessName, options.snippets, intent)
+      buildFallbackReply(options.businessName, options.businessEmail, options.snippets, intent)
     );
   } catch {
-    return buildFallbackReply(options.businessName, options.snippets, intent);
+    return buildFallbackReply(options.businessName, options.businessEmail, options.snippets, intent);
   }
 }
 
