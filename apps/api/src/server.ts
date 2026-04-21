@@ -179,6 +179,8 @@ type RetrievedSnippet = {
   id: string;
   content: string;
   score: number;
+  title?: string;
+  sourceType?: string;
 };
 
 type RegionalSettings = {
@@ -599,12 +601,20 @@ function hasLeadSignal(message: string, signals: BookingSignals) {
 
 async function retrieveKnowledge(businessId: string, query: string) {
   const queryEmbedding = await embedText(query);
+  const queryTerms = new Set(
+    query
+      .toLowerCase()
+      .split(/[^a-z0-9]+/g)
+      .map((term) => term.trim())
+      .filter((term) => term.length > 2),
+  );
   const chunks = await prisma.knowledgeChunk.findMany({
     where: { businessId },
     select: {
       id: true,
       content: true,
       embedding: true,
+      metadata: true,
     },
   });
 
@@ -612,11 +622,31 @@ async function retrieveKnowledge(businessId: string, query: string) {
     .map<RetrievedSnippet>((chunk) => ({
       id: chunk.id,
       content: chunk.content,
-      score: cosineSimilarity(queryEmbedding, toEmbeddingArray(chunk.embedding)),
+      title:
+        chunk.metadata && typeof chunk.metadata === "object" && !Array.isArray(chunk.metadata)
+          ? String((chunk.metadata as Record<string, unknown>).title ?? "")
+          : "",
+      sourceType:
+        chunk.metadata && typeof chunk.metadata === "object" && !Array.isArray(chunk.metadata)
+          ? String((chunk.metadata as Record<string, unknown>).sourceType ?? "")
+          : "",
+      score: (() => {
+        const semantic = cosineSimilarity(queryEmbedding, toEmbeddingArray(chunk.embedding));
+        const contentTerms = new Set(
+          chunk.content
+            .toLowerCase()
+            .split(/[^a-z0-9]+/g)
+            .map((term) => term.trim())
+            .filter((term) => term.length > 2),
+        );
+        const overlapCount = [...queryTerms].filter((term) => contentTerms.has(term)).length;
+        const lexical = queryTerms.size > 0 ? overlapCount / queryTerms.size : 0;
+        return semantic * 0.8 + lexical * 0.2;
+      })(),
     }))
     .sort((left, right) => right.score - left.score)
-    .filter((chunk) => chunk.score > 0.12)
-    .slice(0, 6);
+    .filter((chunk) => chunk.score > 0.18)
+    .slice(0, 8);
 
   return ranked;
 }
@@ -659,7 +689,12 @@ async function generateReply(options: {
   }
 
   const knowledgeBlock = options.snippets.length
-    ? options.snippets.map((snippet, index) => `[${index + 1}] ${snippet.content}`).join("\n")
+    ? options.snippets
+        .map(
+          (snippet, index) =>
+            `[${index + 1}] (${snippet.sourceType || "KNOWLEDGE"}${snippet.title ? ` · ${snippet.title}` : ""}) ${snippet.content}`,
+        )
+        .join("\n")
     : "No relevant snippets were found.";
 
   try {
@@ -688,7 +723,10 @@ async function generateReply(options: {
             `Knowledge snippets:\n${knowledgeBlock}`,
             `Visitor message:\n${options.userMessage}`,
             `Detected intent: ${intent}`,
-            "Respond in a concise, premium, conversion-friendly tone. Mention uncertainty when the answer is not covered by the snippets.",
+            "Respond in a concise, premium, conversion-friendly tone.",
+            "Use only the knowledge snippets for factual claims and avoid making up policies, prices, or services.",
+            "When possible, cite snippet numbers like [1] or [2] in your answer.",
+            "If key details are missing from snippets, explicitly say what is missing and offer to collect contact/stay details for human follow-up.",
           ].join("\n\n"),
         },
       ],

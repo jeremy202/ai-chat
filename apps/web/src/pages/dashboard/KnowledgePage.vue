@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BookOpen, LoaderCircle, Sparkles } from "lucide-vue-next";
+import { BookOpen, LoaderCircle, Sparkles, Trash2 } from "lucide-vue-next";
 import { onMounted } from "vue";
 import { useRouter } from "vue-router";
 import DashboardFrame from "../../components/dashboard/DashboardFrame.vue";
@@ -108,7 +108,17 @@ onMounted(async () => {
             <p class="text-sm font-semibold text-white">{{ item.title }}</p>
             <p class="mt-1 text-xs uppercase tracking-[0.2em] text-slate-400">{{ item.sourceType }}</p>
           </div>
-          <span class="rounded-full bg-teal-500/20 px-2.5 py-1 text-xs text-teal-300">{{ item._count.chunks }} {{ locale.t("dashboard.knowledge.chunks") }}</span>
+          <div class="flex items-center gap-2">
+            <span class="rounded-full bg-teal-500/20 px-2.5 py-1 text-xs text-teal-300">{{ item._count.chunks }} {{ locale.t("dashboard.knowledge.chunks") }}</span>
+            <button
+              type="button"
+              class="inline-flex items-center gap-1 rounded-full border border-rose-300/30 bg-rose-500/10 px-2.5 py-1 text-xs font-medium text-rose-200 hover:bg-rose-500/20"
+              @click="dashboard.deleteKnowledge(item.id)"
+            >
+              <Trash2 class="h-3.5 w-3.5" />
+              Delete
+            </button>
+          </div>
         </div>
         <p class="mt-2 text-sm text-slate-300">
           {{ item.rawContent.slice(0, 260) }}<span v-if="item.rawContent.length > 260">...</span>

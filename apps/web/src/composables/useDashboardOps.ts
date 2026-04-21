@@ -182,6 +182,18 @@ export function useDashboardOps() {
     }
   }
 
+  async function deleteKnowledge(id: string) {
+    error.value = "";
+    success.value = "";
+    try {
+      await adminApi.deleteKnowledge(id);
+      success.value = "Knowledge item deleted.";
+      await loadData();
+    } catch (deleteError) {
+      error.value = deleteError instanceof Error ? deleteError.message : "Unable to delete knowledge item.";
+    }
+  }
+
   async function toggleTakeover(conversation: Conversation) {
     error.value = "";
     success.value = "";
@@ -268,6 +280,7 @@ export function useDashboardOps() {
     summarizeConversation,
     loadData,
     uploadKnowledge,
+    deleteKnowledge,
     toggleTakeover,
     sendReply,
     copySnippet,
