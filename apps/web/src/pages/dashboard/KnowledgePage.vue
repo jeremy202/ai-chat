@@ -10,6 +10,13 @@ const router = useRouter();
 const dashboard = useDashboardOps();
 const locale = useLocaleStore();
 
+function presetCompanyGuide() {
+  if (!dashboard.knowledgeForm.title.trim()) {
+    dashboard.knowledgeForm.title = "Company Guide";
+  }
+  dashboard.knowledgeForm.sourceType = "POLICY";
+}
+
 onMounted(async () => {
   await dashboard.initialize(router);
 });
@@ -31,8 +38,23 @@ onMounted(async () => {
         <div>
           <p class="text-sm text-slate-400">{{ locale.t("dashboard.knowledge.kicker") }}</p>
           <h2 class="mt-1 text-xl font-semibold text-white">{{ locale.t("dashboard.knowledge.heading") }}</h2>
+          <p class="mt-2 text-sm text-slate-300">
+            Paste your full company guide below and click index. The AI will use this content for customer and internal answers.
+          </p>
         </div>
         <BookOpen class="h-5 w-5 text-teal-300" />
+      </div>
+
+      <div class="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-white/5 p-3">
+        <span class="text-xs uppercase tracking-[0.2em] text-slate-400">Quick setup</span>
+        <button
+          type="button"
+          class="rounded-full border border-teal-300/30 bg-teal-500/10 px-3 py-1 text-xs font-medium text-teal-200 hover:bg-teal-500/20"
+          @click="presetCompanyGuide"
+        >
+          Use as company guide
+        </button>
+        <span class="text-xs text-slate-400">Tip: keep sections like policies, services, pricing, and FAQs in one guide.</span>
       </div>
 
       <form class="mt-5 grid gap-4" @submit.prevent="dashboard.uploadKnowledge">
@@ -58,7 +80,7 @@ onMounted(async () => {
         <textarea
           v-model="dashboard.knowledgeForm.content"
           rows="8"
-          :placeholder="locale.t('dashboard.knowledge.contentPlaceholder')"
+          :placeholder="'Paste your company guide here. Example: About us, policies, pricing rules, services, escalation paths, and FAQs.'"
           class="rounded-xl border border-white/10 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-teal-300"
         />
         <div class="flex justify-end">

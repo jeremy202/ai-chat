@@ -173,7 +173,7 @@ export function useDashboardOps() {
       knowledgeForm.title = "";
       knowledgeForm.sourceType = "FAQ";
       knowledgeForm.content = "";
-      success.value = "Knowledge indexed successfully.";
+      success.value = "Knowledge indexed successfully. AI will now use it in responses.";
       await loadData();
     } catch (uploadError) {
       error.value = uploadError instanceof Error ? uploadError.message : "Could not upload knowledge.";
