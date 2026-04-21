@@ -128,8 +128,8 @@ function onLocaleChange(event: Event) {
 
 <template>
   <div class="min-h-screen bg-linear-to-b from-slate-950 via-slate-900 to-slate-950 text-slate-100">
-    <div class="mx-auto grid max-w-[1600px] gap-6 px-4 py-6 lg:grid-cols-[270px_1fr] lg:px-6">
-      <aside class="rounded-3xl border border-white/10 bg-linear-to-b from-slate-900 to-slate-950 p-4 shadow-[0_20px_50px_-40px_rgba(15,23,42,0.5)] lg:sticky lg:top-6 lg:h-[calc(100vh-3rem)] lg:overflow-hidden">
+    <div class="mx-auto grid max-w-[1680px] gap-5 px-3 py-5 sm:px-4 lg:grid-cols-[280px_1fr] lg:px-6">
+      <aside class="rounded-3xl border border-white/10 bg-linear-to-b from-slate-900/95 to-slate-950 p-4 shadow-[0_18px_40px_-30px_rgba(15,23,42,0.5)] lg:sticky lg:top-5 lg:h-[calc(100vh-2.5rem)] lg:overflow-hidden">
         <div class="flex h-full min-h-0 flex-col">
         <div class="flex items-center gap-3 border-b border-white/10 pb-4">
           <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-500/20 text-teal-300">
@@ -146,7 +146,7 @@ function onLocaleChange(event: Event) {
             v-for="item in navItems"
             :key="item.to"
             :to="item.to"
-            class="flex items-center gap-2 rounded-xl px-3 py-2 text-sm"
+            class="flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition duration-150"
             :class="
               activePath === item.to
                 ? 'bg-teal-500/20 font-medium text-white'
@@ -197,7 +197,7 @@ function onLocaleChange(event: Event) {
         </div>
       </aside>
 
-      <main class="space-y-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto lg:pr-1">
+      <main class="space-y-5 lg:max-h-[calc(100vh-2.5rem)] lg:overflow-y-auto lg:pr-1">
         <div class="pointer-events-none fixed right-4 top-4 z-90 flex w-full max-w-sm flex-col gap-3 sm:right-6 sm:top-6">
           <Transition
             enter-active-class="transition-opacity duration-120 ease-out"
@@ -256,7 +256,7 @@ function onLocaleChange(event: Event) {
           </Transition>
         </div>
 
-        <header class="rounded-3xl border border-white/10 bg-linear-to-br from-slate-900/90 to-slate-900/60 p-5 shadow-[0_16px_40px_-30px_rgba(15,23,42,0.65)] sm:p-6">
+        <header class="dashboard-card rounded-3xl bg-linear-to-br from-slate-900/90 to-slate-900/60 sm:p-6">
           <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ locale.t("dashboard.header") }}</p>
           <h1 class="mt-1 text-2xl font-semibold tracking-tight text-white">{{ title }}</h1>
           <p class="mt-1 text-sm text-slate-300">{{ subtitle }}</p>

@@ -910,13 +910,44 @@ async function readKnowledgeContent(
   return body.content?.trim() ?? "";
 }
 
-app.get("/api/health", (_req, res) => {
+async function checkDatabaseConnection() {
+  await prisma.$queryRaw`SELECT 1`;
+}
+
+app.get("/api/health", async (_req, res) => {
+  let database: "ok" | "error" = "ok";
+  try {
+    await checkDatabaseConnection();
+  } catch (error) {
+    database = "error";
+    console.error("Healthcheck database probe failed", error);
+  }
+
   res.json({
-    status: "ok",
+    status: database === "ok" ? "ok" : "degraded",
     service: "ai-concierge-api",
+    database,
     aiProvider,
     embeddingProvider: embeddingClient ? (env.XAI_API_KEY ? "xai-grok" : "openai") : "fallback-local",
   });
+});
+
+app.get("/api/ready", async (_req, res) => {
+  try {
+    await checkDatabaseConnection();
+    res.status(200).json({
+      status: "ready",
+      service: "ai-concierge-api",
+      database: "ok",
+    });
+  } catch (error) {
+    console.error("Readiness check failed", error);
+    res.status(503).json({
+      status: "not_ready",
+      service: "ai-concierge-api",
+      database: "error",
+    });
+  }
 });
 
 app.post(
@@ -2200,6 +2231,14 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   res.status(500).json({
     error: "Internal server error.",
   });
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled promise rejection", reason);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught exception", error);
 });
 
 const isVercelRuntime = process.env.VERCEL === "1";

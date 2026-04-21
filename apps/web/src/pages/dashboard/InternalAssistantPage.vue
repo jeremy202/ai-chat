@@ -46,7 +46,7 @@ onMounted(async () => {
     @refresh="dashboard.loadData"
     @logout="dashboard.logout(router)"
   >
-    <article class="rounded-2xl border border-white/10 bg-slate-900/70 p-6">
+    <article class="dashboard-card">
       <div class="flex items-center gap-3">
         <Bot class="h-5 w-5 text-teal-300" />
         <p class="text-sm text-slate-300">{{ locale.t("dashboard.internal.helper") }}</p>
@@ -54,16 +54,16 @@ onMounted(async () => {
       <textarea
         v-model="question"
         rows="4"
-        class="mt-4 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white"
+        class="dashboard-input mt-4 w-full"
         :placeholder="locale.t('dashboard.internal.placeholder')"
       />
-      <button class="mt-3 inline-flex items-center gap-2 rounded-full bg-teal-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-teal-400" :disabled="isAsking" @click="ask">
+      <button class="dashboard-button-primary mt-3" :disabled="isAsking" @click="ask">
         <LoaderCircle v-if="isAsking" class="h-4 w-4 animate-spin" />
         {{ locale.t("dashboard.internal.ask") }}
       </button>
     </article>
 
-    <article class="mt-4 rounded-2xl border border-white/10 bg-slate-900/70 p-6">
+    <article class="dashboard-card mt-4">
       <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ locale.t("dashboard.internal.answer") }}</p>
       <p class="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-200">
         {{ answer || locale.t("dashboard.internal.empty") }}

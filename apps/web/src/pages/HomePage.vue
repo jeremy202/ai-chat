@@ -136,10 +136,10 @@ function onLocaleChange(event: Event) {
     <!-- Animated Background Gradients -->
     <div class="fixed inset-0 overflow-hidden pointer-events-none">
       <div
-        class="absolute -top-40 -right-40 h-80 w-80 rounded-full bg-teal-500/15 blur-[120px]"
+        class="absolute -top-40 -right-40 h-80 w-80 rounded-full bg-teal-500/10 blur-[120px]"
       />
       <div
-        class="absolute top-60 -left-40 h-80 w-80 rounded-full bg-indigo-500/15 blur-[120px]"
+        class="absolute top-60 -left-40 h-80 w-80 rounded-full bg-indigo-500/10 blur-[120px]"
       />
       <div
         class="absolute bottom-40 right-20 h-60 w-60 rounded-full bg-emerald-500/10 blur-[100px]"
@@ -188,17 +188,17 @@ function onLocaleChange(event: Event) {
             >
               <a
                 href="#features"
-                class="transition-all hover:text-teal-300 hover:-translate-y-0.5"
+                class="transition-colors hover:text-teal-300"
                 >{{ locale.t("nav.features") }}</a
               >
               <a
                 href="#how"
-                class="transition-all hover:text-teal-300 hover:-translate-y-0.5"
+                class="transition-colors hover:text-teal-300"
                 >{{ locale.t("nav.how") }}</a
               >
               <a
                 href="#pricing"
-                class="transition-all hover:text-teal-300 hover:-translate-y-0.5"
+                class="transition-colors hover:text-teal-300"
                 >{{ locale.t("nav.pricing") }}</a
               >
             </div>
@@ -219,7 +219,7 @@ function onLocaleChange(event: Event) {
               </RouterLink>
               <RouterLink
                 :to="primaryLink"
-                class="inline-flex items-center gap-2 rounded-full bg-linear-to-r from-teal-500 to-emerald-500 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-teal-500/25 transition-all hover:scale-105 hover:shadow-teal-500/40"
+                class="inline-flex items-center gap-2 rounded-full bg-linear-to-r from-teal-500 to-emerald-500 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-teal-500/20 transition duration-150 hover:brightness-110"
               >
                 {{
                   auth.isAuthenticated
@@ -304,7 +304,7 @@ function onLocaleChange(event: Event) {
                   <div class="flex items-center justify-between mb-4">
                     <div class="flex items-center gap-2">
                       <div
-                        class="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"
+                        class="h-2 w-2 rounded-full bg-emerald-400"
                       />
                       <p
                         class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400"

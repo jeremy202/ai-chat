@@ -74,21 +74,21 @@ onMounted(async () => {
     @refresh="loadRegional"
     @logout="dashboard.logout(router)"
   >
-    <article class="rounded-2xl border border-white/10 bg-slate-900/70 p-6">
+    <article class="dashboard-card">
       <div class="flex items-center gap-3">
         <Globe class="h-5 w-5 text-teal-300" />
         <p class="text-sm text-slate-300">{{ locale.t("dashboard.regional.helper") }}</p>
       </div>
       <div class="mt-4 grid gap-3 md:grid-cols-2">
-        <select v-model="form.defaultLanguage" class="rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white">
+        <select v-model="form.defaultLanguage" class="dashboard-input">
           <option value="en-CA">English (Canada)</option>
           <option value="fr-CA">French (Canada)</option>
         </select>
-        <input v-model="form.additionalLanguages" class="rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white" :placeholder="locale.t('dashboard.regional.additional')" />
-        <input v-model="form.province" class="rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white" :placeholder="locale.t('dashboard.regional.province')" />
-        <input v-model="form.timezone" class="rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white" :placeholder="locale.t('dashboard.regional.timezone')" />
+        <input v-model="form.additionalLanguages" class="dashboard-input" :placeholder="locale.t('dashboard.regional.additional')" />
+        <input v-model="form.province" class="dashboard-input" :placeholder="locale.t('dashboard.regional.province')" />
+        <input v-model="form.timezone" class="dashboard-input" :placeholder="locale.t('dashboard.regional.timezone')" />
       </div>
-      <button class="mt-4 inline-flex items-center gap-2 rounded-full bg-teal-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-teal-400" :disabled="saving" @click="saveRegional">
+      <button class="dashboard-button-primary mt-4" :disabled="saving" @click="saveRegional">
         <LoaderCircle v-if="saving" class="h-4 w-4 animate-spin" />
         {{ locale.t("dashboard.regional.save") }}
       </button>

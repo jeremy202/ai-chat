@@ -76,41 +76,41 @@ onMounted(async () => {
     @refresh="loadAutomations"
     @logout="dashboard.logout(router)"
   >
-    <article class="rounded-2xl border border-white/10 bg-slate-900/70 p-6">
+    <article class="dashboard-card">
       <div class="flex items-center gap-3">
         <ClipboardList class="h-5 w-5 text-teal-300" />
         <p class="text-sm text-slate-300">{{ locale.t("dashboard.automations.helper") }}</p>
       </div>
       <div class="mt-4 grid gap-3 md:grid-cols-[1fr_200px_200px]">
-        <input v-model="form.title" class="rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white" :placeholder="locale.t('dashboard.automations.titlePlaceholder')" />
-        <select v-model="form.type" class="rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white">
+        <input v-model="form.title" class="dashboard-input" :placeholder="locale.t('dashboard.automations.titlePlaceholder')" />
+        <select v-model="form.type" class="dashboard-input">
           <option value="INVOICE_REMINDER">{{ locale.t("dashboard.automations.invoice") }}</option>
           <option value="INVENTORY_CHECK">{{ locale.t("dashboard.automations.inventory") }}</option>
           <option value="FOLLOW_UP">{{ locale.t("dashboard.automations.followup") }}</option>
           <option value="OTHER">{{ locale.t("dashboard.automations.other") }}</option>
         </select>
-        <select v-model="form.schedule" class="rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-white">
+        <select v-model="form.schedule" class="dashboard-input">
           <option value="DAILY">{{ locale.t("dashboard.automations.daily") }}</option>
           <option value="WEEKLY">{{ locale.t("dashboard.automations.weekly") }}</option>
           <option value="MONTHLY">{{ locale.t("dashboard.automations.monthly") }}</option>
           <option value="MANUAL">{{ locale.t("dashboard.automations.manual") }}</option>
         </select>
       </div>
-      <button class="mt-3 inline-flex items-center gap-2 rounded-full bg-teal-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-teal-400" :disabled="isSaving" @click="createAutomation">
+      <button class="dashboard-button-primary mt-3" :disabled="isSaving" @click="createAutomation">
         <LoaderCircle v-if="isSaving" class="h-4 w-4 animate-spin" />
         {{ locale.t("dashboard.automations.create") }}
       </button>
     </article>
 
     <section class="mt-4 grid gap-3">
-      <article v-for="item in automations" :key="item.id" class="rounded-xl border border-white/10 bg-white/5 p-4">
+      <article v-for="item in automations" :key="item.id" class="dashboard-subcard">
         <div class="flex items-center justify-between gap-3">
           <div>
             <p class="text-sm font-semibold text-white">{{ item.title }}</p>
             <p class="mt-1 text-xs text-slate-400">{{ item.type }} · {{ item.schedule }}</p>
           </div>
           <button
-            class="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-medium text-slate-200 hover:bg-white/20"
+            class="dashboard-button-secondary rounded-full px-3 py-1"
             :disabled="runningId === item.id"
             @click="runAutomation(item.id)"
           >

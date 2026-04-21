@@ -53,18 +53,18 @@ onMounted(async () => {
     @refresh="loadSummary"
     @logout="dashboard.logout(router)"
   >
-    <article class="rounded-2xl border border-white/10 bg-slate-900/70 p-6">
+    <article class="dashboard-card">
       <div class="flex items-center justify-between gap-3">
         <div class="flex items-center gap-3">
           <BarChart3 class="h-5 w-5 text-teal-300" />
           <p class="text-sm text-slate-300">{{ locale.t("dashboard.reports.performance") }}</p>
         </div>
         <div class="flex items-center gap-2">
-          <select v-model="period" class="rounded-lg border border-white/10 bg-slate-950 px-3 py-1.5 text-sm text-white">
+          <select v-model="period" class="dashboard-input rounded-lg py-1.5">
             <option value="daily">{{ locale.t("dashboard.reports.daily") }}</option>
             <option value="weekly">{{ locale.t("dashboard.reports.weekly") }}</option>
           </select>
-          <button class="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/10 px-3 py-1.5 text-xs text-slate-200 hover:bg-white/20" @click="loadSummary">
+          <button class="dashboard-button-secondary" @click="loadSummary">
             <RefreshCw class="h-3.5 w-3.5" />
             {{ locale.t("dashboard.actions.refresh") }}
           </button>
@@ -73,19 +73,19 @@ onMounted(async () => {
 
       <div v-if="loadingSummary" class="mt-4 text-sm text-slate-400">{{ locale.t("dashboard.reports.loading") }}</div>
       <div v-else-if="summary" class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div class="rounded-xl border border-white/10 bg-white/5 p-4">
+        <div class="dashboard-subcard">
           <p class="text-xs text-slate-400">{{ locale.t("dashboard.reports.conversations") }}</p>
           <p class="mt-1 text-2xl font-semibold text-white">{{ summary.totalConversations }}</p>
         </div>
-        <div class="rounded-xl border border-white/10 bg-white/5 p-4">
+        <div class="dashboard-subcard">
           <p class="text-xs text-slate-400">{{ locale.t("dashboard.reports.handoffs") }}</p>
           <p class="mt-1 text-2xl font-semibold text-white">{{ summary.humanHandoffs }}</p>
         </div>
-        <div class="rounded-xl border border-white/10 bg-white/5 p-4">
+        <div class="dashboard-subcard">
           <p class="text-xs text-slate-400">{{ locale.t("dashboard.reports.qualified") }}</p>
           <p class="mt-1 text-2xl font-semibold text-white">{{ summary.qualifiedLeads }}</p>
         </div>
-        <div class="rounded-xl border border-white/10 bg-white/5 p-4">
+        <div class="dashboard-subcard">
           <p class="text-xs text-slate-400">{{ locale.t("dashboard.reports.bookings") }}</p>
           <p class="mt-1 text-2xl font-semibold text-white">{{ summary.bookingsCaptured }}</p>
         </div>

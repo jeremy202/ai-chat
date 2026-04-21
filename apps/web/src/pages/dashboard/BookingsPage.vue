@@ -26,7 +26,7 @@ onMounted(async () => {
     @refresh="dashboard.loadData"
     @logout="dashboard.logout(router)"
   >
-    <article class="rounded-2xl border border-white/10 bg-slate-900/70 p-6">
+    <article class="dashboard-card">
       <div class="flex items-start justify-between gap-4">
         <div>
           <p class="text-sm text-slate-400">{{ locale.t("dashboard.bookings.kicker") }}</p>
@@ -39,7 +39,7 @@ onMounted(async () => {
         <div
           v-for="status in dashboard.bookingStatusSummary"
           :key="status.status"
-          class="rounded-xl border border-white/10 bg-white/5 p-3"
+          class="dashboard-subcard p-3"
         >
           <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ status.status }}</p>
           <p class="mt-1 text-2xl font-semibold text-white">{{ status.count }}</p>
@@ -50,7 +50,7 @@ onMounted(async () => {
         <article
           v-for="booking in dashboard.recentBookings"
           :key="booking.id"
-          class="rounded-xl border border-white/10 bg-white/5 p-4"
+          class="dashboard-subcard"
         >
           <div class="flex items-start justify-between gap-3">
             <div>

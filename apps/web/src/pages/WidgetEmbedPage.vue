@@ -112,7 +112,7 @@ function closeWidget() {
 <template>
   <main class="min-h-screen bg-slate-950 px-3 py-3 text-white">
     <div
-      class="mx-auto flex min-h-[calc(100vh-1.5rem)] w-full max-w-md flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-slate-900/95 shadow-[0_35px_100px_-40px_rgba(14,165,233,0.55)]"
+      class="mx-auto flex min-h-[calc(100vh-1.5rem)] w-full max-w-md flex-col overflow-hidden rounded-4xl border border-white/10 bg-slate-900/95 shadow-[0_26px_80px_-44px_rgba(2,6,23,0.9)]"
     >
       <header class="border-b border-white/10 px-5 py-4">
         <div class="flex items-center gap-3">
@@ -169,7 +169,7 @@ function closeWidget() {
             class="max-w-[86%] rounded-3xl px-4 py-3 text-sm leading-6"
             :class="
               message.role === 'user'
-                ? 'bg-cyan-300 text-slate-950'
+                ? 'bg-teal-300 text-slate-950'
                 : 'border border-white/10 bg-white/5 text-slate-100'
             "
           >
@@ -197,7 +197,7 @@ function closeWidget() {
             />
             <button
               type="submit"
-              class="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-300 text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
+              class="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-teal-300 text-slate-950 transition hover:bg-teal-200 disabled:cursor-not-allowed disabled:opacity-60"
               :disabled="isSending"
             >
               <Send class="h-4 w-4" />

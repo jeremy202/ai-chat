@@ -30,7 +30,7 @@ onMounted(async () => {
       <article
         v-for="card in dashboard.cards"
         :key="card.label"
-        class="rounded-2xl border border-white/10 bg-slate-900/70 p-5"
+        class="dashboard-card p-5"
       >
         <p class="text-sm text-slate-400">{{ card.label }}</p>
         <p class="mt-2 text-3xl font-semibold text-white">{{ card.value }}</p>
@@ -39,21 +39,21 @@ onMounted(async () => {
     </section>
 
     <section class="mt-4 grid gap-4 xl:grid-cols-[1.2fr_1fr_1fr]">
-      <article class="rounded-2xl border border-white/10 bg-slate-900/70 p-5">
+      <article class="dashboard-card p-5">
         <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ locale.t("dashboard.overview.conversationOps") }}</p>
         <div class="mt-3 grid gap-3 sm:grid-cols-2">
-          <div class="rounded-xl border border-white/10 bg-white/5 p-3">
+          <div class="dashboard-subcard p-3">
             <p class="text-sm text-slate-400">{{ locale.t("dashboard.overview.openNow") }}</p>
             <p class="mt-1 text-2xl font-semibold text-white">{{ dashboard.openConversations }}</p>
           </div>
-          <div class="rounded-xl border border-white/10 bg-white/5 p-3">
+          <div class="dashboard-subcard p-3">
             <p class="text-sm text-slate-400">{{ locale.t("dashboard.overview.humanHandoff") }}</p>
             <p class="mt-1 text-2xl font-semibold text-white">{{ dashboard.humanHandoffConversations }}</p>
           </div>
         </div>
       </article>
 
-      <article class="rounded-2xl border border-white/10 bg-slate-900/70 p-5">
+      <article class="dashboard-card p-5">
         <div class="flex items-center justify-between">
           <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ locale.t("dashboard.overview.bookingPipeline") }}</p>
           <CalendarDays class="h-4 w-4 text-teal-300" />
@@ -62,7 +62,7 @@ onMounted(async () => {
           <div
             v-for="status in dashboard.bookingStatusSummary"
             :key="status.status"
-            class="rounded-xl border border-white/10 bg-white/5 p-3"
+            class="dashboard-subcard p-3"
           >
             <div class="flex items-center justify-between text-sm">
               <p class="text-slate-300">{{ status.status }}</p>

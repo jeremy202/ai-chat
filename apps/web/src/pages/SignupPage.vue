@@ -93,48 +93,48 @@ function onLocaleChange(event: Event) {
   <div class="app-shell px-4 py-10 sm:px-6">
     <div class="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[0.9fr_1.1fr]">
       <section class="glass-card p-8">
-        <RouterLink class="inline-flex items-center gap-2 text-sm font-medium text-slate-500" to="/">
+        <RouterLink class="inline-flex items-center gap-2 text-sm font-medium text-slate-400" to="/">
           <ArrowLeft class="h-4 w-4" />
           Back to product overview
         </RouterLink>
-        <h1 class="mt-8 text-4xl font-semibold tracking-tight text-slate-950">
+        <h1 class="mt-8 text-4xl font-semibold tracking-tight text-white">
           Launch your concierge in under five minutes.
         </h1>
-        <p class="mt-4 text-base leading-7 text-slate-600">
+        <p class="mt-4 text-base leading-7 text-slate-300">
           Create your hospitality workspace, upload your room and policy knowledge, then embed the
           widget on your website with one script.
         </p>
 
         <div class="mt-8 space-y-4">
           <div class="soft-panel p-5">
-            <p class="text-sm text-slate-500">Step 1</p>
-            <p class="mt-1 text-lg font-semibold text-slate-950">Create your property workspace</p>
+            <p class="text-sm text-slate-400">Step 1</p>
+            <p class="mt-1 text-lg font-semibold text-white">Create your property workspace</p>
           </div>
           <div class="soft-panel p-5">
-            <p class="text-sm text-slate-500">Step 2</p>
-            <p class="mt-1 text-lg font-semibold text-slate-950">Add FAQs, rates, and room details</p>
+            <p class="text-sm text-slate-400">Step 2</p>
+            <p class="mt-1 text-lg font-semibold text-white">Add FAQs, rates, and room details</p>
           </div>
           <div class="soft-panel p-5">
-            <p class="text-sm text-slate-500">Step 3</p>
-            <p class="mt-1 text-lg font-semibold text-slate-950">Install the widget and capture leads</p>
+            <p class="text-sm text-slate-400">Step 3</p>
+            <p class="mt-1 text-lg font-semibold text-white">Install the widget and capture leads</p>
           </div>
         </div>
       </section>
 
       <section class="glass-card p-8 sm:p-10">
-        <p class="text-sm font-semibold uppercase tracking-[0.25em] text-teal-700">Create workspace</p>
+        <p class="text-sm font-semibold uppercase tracking-[0.25em] text-teal-300">Create workspace</p>
         <div class="mt-3">
-          <select class="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-700" :value="locale.locale" @change="onLocaleChange">
+          <select class="rounded-full border border-white/10 bg-slate-900 px-3 py-1.5 text-xs text-slate-200" :value="locale.locale" @change="onLocaleChange">
             <option value="en-CA">{{ locale.t("locale.english") }}</option>
             <option value="fr-CA">{{ locale.t("locale.french") }}</option>
           </select>
         </div>
-        <h2 class="mt-4 text-3xl font-semibold tracking-tight text-slate-950">
+        <h2 class="mt-4 text-3xl font-semibold tracking-tight text-white">
           {{ locale.t("auth.createAccount") }}
         </h2>
         <form class="mt-8 grid gap-5 sm:grid-cols-2" @submit.prevent="handleSubmit">
           <label class="block sm:col-span-2">
-            <span class="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
+            <span class="mb-2 flex items-center gap-2 text-sm font-medium text-slate-300">
               <Building2 class="h-4 w-4" />
               Business name
             </span>
@@ -147,7 +147,7 @@ function onLocaleChange(event: Event) {
           </label>
 
           <label class="block">
-            <span class="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
+            <span class="mb-2 flex items-center gap-2 text-sm font-medium text-slate-300">
               <Mail class="h-4 w-4" />
               Business email
             </span>
@@ -160,7 +160,7 @@ function onLocaleChange(event: Event) {
           </label>
 
           <label class="block">
-            <span class="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
+            <span class="mb-2 flex items-center gap-2 text-sm font-medium text-slate-300">
               <Globe class="h-4 w-4" />
               Website URL
             </span>
@@ -173,7 +173,7 @@ function onLocaleChange(event: Event) {
           </label>
 
           <label class="block">
-            <span class="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
+            <span class="mb-2 flex items-center gap-2 text-sm font-medium text-slate-300">
               <UserRound class="h-4 w-4" />
               Your name
             </span>
@@ -181,7 +181,7 @@ function onLocaleChange(event: Event) {
           </label>
 
           <label class="block">
-            <span class="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
+            <span class="mb-2 flex items-center gap-2 text-sm font-medium text-slate-300">
               <Mail class="h-4 w-4" />
               Login email
             </span>
@@ -194,7 +194,7 @@ function onLocaleChange(event: Event) {
           </label>
 
           <label class="block sm:col-span-2">
-            <span class="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
+            <span class="mb-2 flex items-center gap-2 text-sm font-medium text-slate-300">
               <Lock class="h-4 w-4" />
               Password
             </span>
@@ -208,13 +208,13 @@ function onLocaleChange(event: Event) {
 
           <p
             v-if="error"
-            class="sm:col-span-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
+            class="sm:col-span-2 rounded-2xl border border-rose-300/30 bg-rose-500/15 px-4 py-3 text-sm text-rose-200"
           >
             {{ error }}
           </p>
 
           <button
-            class="pill-button sm:col-span-2 w-full bg-slate-950 py-3 text-white disabled:cursor-not-allowed disabled:opacity-60"
+            class="pill-button sm:col-span-2 w-full bg-linear-to-r from-teal-500 to-emerald-500 py-3 text-white shadow-[0_16px_30px_-20px_rgba(45,212,191,0.9)] disabled:cursor-not-allowed disabled:opacity-60"
             :disabled="isSubmitting"
             type="submit"
           >
@@ -222,9 +222,9 @@ function onLocaleChange(event: Event) {
           </button>
         </form>
 
-        <p class="mt-6 text-sm text-slate-500">
+        <p class="mt-6 text-sm text-slate-400">
           Already have an account?
-          <RouterLink class="font-medium text-teal-700" to="/login">Log in</RouterLink>
+          <RouterLink class="font-medium text-teal-300 hover:text-teal-200" to="/login">Log in</RouterLink>
         </p>
       </section>
     </div>
