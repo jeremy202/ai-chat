@@ -539,7 +539,9 @@ function chunkText(content: string, maxLength = 600, overlap = 120) {
     .map((section) => section.trim())
     .filter((section) => section.length > 0 && section.length <= maxLength);
   if (sectionChunks.length >= 4) {
-    return sectionChunks;
+    return sectionChunks.filter(
+      (chunk) => chunk.length >= 60 && /[a-zA-Z]{3,}/.test(chunk) && /\s/.test(chunk),
+    );
   }
 
   const chunks: string[] = [];
@@ -551,7 +553,7 @@ function chunkText(content: string, maxLength = 600, overlap = 120) {
     const end = boundary > maxLength * 0.55 ? cursor + boundary + 1 : cursor + slice.length;
     const chunk = normalized.slice(cursor, end).trim();
 
-    if (chunk) {
+    if (chunk.length >= 60 && /[a-zA-Z]{3,}/.test(chunk) && /\s/.test(chunk)) {
       chunks.push(chunk);
     }
 
@@ -563,6 +565,10 @@ function chunkText(content: string, maxLength = 600, overlap = 120) {
 
 function detectIntent(message: string) {
   const normalized = message.toLowerCase();
+
+  if (/(talk to (an )?(agent|human|staff)|human agent|live agent|representative|real person|customer support)/.test(normalized)) {
+    return "human_handoff";
+  }
 
   if (/(refund|chargeback|dispute|money back|billing issue|cancel and refund)/.test(normalized)) {
     return "refund_dispute";
@@ -577,6 +583,33 @@ function detectIntent(message: string) {
   }
 
   return "inquiry";
+}
+
+function detectGuideFocus(message: string) {
+  const normalized = message.toLowerCase();
+  if (/(queen|king|suite|room type|room|sleep|balcony|kitchenette|bed)/.test(normalized)) {
+    return "ROOM";
+  }
+  if (/(price|pricing|rate|cost|fee|cad|\$|discount|night)/.test(normalized)) {
+    return "PRICING";
+  }
+  if (
+    /(policy|pet|cancel|cancellation|check-in|check in|check-out|checkout|parking|refund|child|children|rollaway|late check-out|early check-in)/.test(
+      normalized,
+    )
+  ) {
+    return "POLICY";
+  }
+  if (/(amenities|wifi|wi-fi|gym|fitness|housekeeping|laundry|coffee|concierge)/.test(normalized)) {
+    return "SERVICE";
+  }
+  if (/(address|location|nearby|attraction|cn tower|union station|waterfront|eaton)/.test(normalized)) {
+    return "FAQ";
+  }
+  if (/(payment|visa|mastercard|amex|apple pay|google pay|debit)/.test(normalized)) {
+    return "FAQ";
+  }
+  return null;
 }
 
 function extractBookingSignals(message: string): BookingSignals {
@@ -614,6 +647,7 @@ function hasLeadSignal(message: string, signals: BookingSignals) {
 async function retrieveKnowledge(businessId: string, query: string) {
   const queryEmbedding = await embedText(query);
   const normalizedQuery = query.toLowerCase();
+  const preferredSourceType = detectGuideFocus(query);
   const pricingIntent = /(price|pricing|rate|cost|fee|discount|cad|\$)/.test(normalizedQuery);
   const policyIntent =
     /(policy|pet|cancel|cancellation|check-in|check in|check-out|checkout|parking|refund|child|children)/.test(
@@ -676,17 +710,24 @@ async function retrieveKnowledge(businessId: string, query: string) {
         const sourceType = String(metadata.sourceType ?? "").toUpperCase();
         const sourceBoost =
           (pricingIntent && sourceType === "PRICING" ? 0.05 : 0) +
-          (policyIntent && (sourceType === "POLICY" || sourceType === "FAQ") ? 0.04 : 0);
+          (policyIntent && (sourceType === "POLICY" || sourceType === "FAQ") ? 0.04 : 0) +
+          (preferredSourceType && sourceType === preferredSourceType ? 0.08 : 0);
 
         const updatedAtMs = new Date(chunk.knowledgeItem.updatedAt).getTime();
         const recencyBoost =
           newestTimestamp > 0 ? Math.max(0, Math.min(0.05, ((updatedAtMs / newestTimestamp) - 0.96) * 1.2)) : 0;
 
-        return semantic * 0.72 + lexical * 0.23 + sourceBoost + recencyBoost;
+        return semantic * 0.68 + lexical * 0.24 + sourceBoost + recencyBoost;
       })(),
     }))
     .sort((left, right) => right.score - left.score)
-    .filter((chunk) => chunk.score > 0.18)
+    .filter(
+      (chunk) =>
+        chunk.score > (preferredSourceType ? 0.2 : 0.18) &&
+        chunk.content.length >= 60 &&
+        /[a-zA-Z]{3,}/.test(chunk.content) &&
+        /\s/.test(chunk.content),
+    )
     .slice(0, 8);
 
   return ranked;
@@ -699,6 +740,10 @@ function buildFallbackReply(
   intent: string,
   handoffPrompt = true,
 ) {
+  if (intent === "human_handoff") {
+    return `Absolutely — I can connect you with a human agent. Please share your full name and best email or phone number, and our team will follow up quickly. You can also contact ${businessEmail} directly.`;
+  }
+
   if (intent === "refund_dispute") {
     return `I can help escalate refund and billing disputes to hotel staff right away. Please share your booking name, reservation number, and the issue details, or contact ${businessEmail} for priority support.`;
   }
@@ -736,6 +781,11 @@ async function generateReply(options: {
   snippets: RetrievedSnippet[];
 }) {
   const intent = detectIntent(options.userMessage);
+  const guideFocus = detectGuideFocus(options.userMessage);
+
+  if (intent === "human_handoff") {
+    return buildFallbackReply(options.businessName, options.businessEmail, options.snippets, intent);
+  }
 
   if (!chatClient) {
     return buildFallbackReply(options.businessName, options.businessEmail, options.snippets, intent);
@@ -776,9 +826,11 @@ async function generateReply(options: {
             `Knowledge snippets:\n${knowledgeBlock}`,
             `Visitor message:\n${options.userMessage}`,
             `Detected intent: ${intent}`,
+            `Guide focus category: ${guideFocus ?? "GENERAL"}`,
             "Respond in a concise, premium, conversion-friendly tone.",
             "Use only the knowledge snippets for factual claims and avoid making up policies, prices, or services.",
             "When possible, cite snippet numbers like [1] or [2] in your answer.",
+            "If a clear answer exists in snippets, answer directly first, then add one optional helpful next step.",
             "If key details are missing from snippets, explicitly say what is missing and offer to collect contact/stay details for human follow-up.",
           ].join("\n\n"),
         },
