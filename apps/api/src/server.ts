@@ -2245,7 +2245,7 @@ const isVercelRuntime = process.env.VERCEL === "1";
 const isRailwayRuntime = Boolean(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID);
 
 if (!isVercelRuntime || isRailwayRuntime) {
-  const port = Number(process.env.PORT ?? 8080);
+  const port = Number(process.env.PORT ?? 4000);
   app.listen(port, () => {
     console.info(`AI Concierge API listening on http://localhost:${port}`);
   });
