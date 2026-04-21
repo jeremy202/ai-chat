@@ -53,7 +53,7 @@ const envSchema = z.object({
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().default("AI Concierge <noreply@aiconciergeassistant.com>"),
   WEB_APP_URL: optionalUrlWithDefault("http://localhost:5173"),
-  API_URL: optionalUrlWithDefault("http://localhost:8080"),
+  API_URL: optionalUrlWithDefault("http://localhost:4000"),
 });
 
 export const env = envSchema.parse(process.env);
