@@ -6,7 +6,7 @@ import { widgetApi, type Conversation, type WidgetConfig } from '../services/api
 
 type WidgetMessage = {
   id: string
-  role: 'assistant' | 'user'
+  role: 'assistant' | 'user' | 'admin'
   content: string
 }
 
@@ -58,10 +58,18 @@ function formatAssistantMessage(content: string) {
 function applyConversation(conversation: Conversation) {
   conversationId.value = conversation.id
   messages.value = conversation.messages
-    .filter((message) => message.role === 'USER' || message.role === 'ASSISTANT')
+    .filter(
+      (message) =>
+        message.role === 'USER' || message.role === 'ASSISTANT' || message.role === 'ADMIN',
+    )
     .map((message) => ({
       id: message.id,
-      role: message.role === 'USER' ? 'user' : 'assistant',
+      role:
+        message.role === 'USER'
+          ? 'user'
+          : message.role === 'ADMIN'
+            ? 'admin'
+            : 'assistant',
       content: message.content,
     }))
 
@@ -205,10 +213,15 @@ function closeWidget() {
             :class="
               message.role === 'user'
                 ? 'bg-teal-300 text-slate-950'
+                : message.role === 'admin'
+                  ? 'border border-amber-300/30 bg-amber-500/10 text-amber-100'
                 : 'border border-white/10 bg-white/5 text-slate-100'
             "
           >
-            <template v-if="message.role === 'assistant'">
+            <template v-if="message.role === 'assistant' || message.role === 'admin'">
+              <p v-if="message.role === 'admin'" class="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-200/90">
+                Hotel team
+              </p>
               <div
                 class="widget-rich-text space-y-2"
                 v-html="formatAssistantMessage(message.content)"
