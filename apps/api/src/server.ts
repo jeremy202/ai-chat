@@ -570,6 +570,14 @@ function detectIntent(message: string) {
     return "human_handoff";
   }
 
+  if (/(complaint|not happy|bad service|terrible|unacceptable|issue with my stay|lost property|lost item|left my)/.test(normalized)) {
+    return "support_escalation";
+  }
+
+  if (/(group booking|group rate|wedding block|conference block|5\+ rooms|five rooms|corporate rate|business rate|accessibility|accessible room|wheelchair)/.test(normalized)) {
+    return "special_request";
+  }
+
   if (/(refund|chargeback|dispute|money back|billing issue|cancel and refund)/.test(normalized)) {
     return "refund_dispute";
   }
@@ -609,6 +617,82 @@ function detectGuideFocus(message: string) {
   if (/(payment|visa|mastercard|amex|apple pay|google pay|debit)/.test(normalized)) {
     return "FAQ";
   }
+  return null;
+}
+
+function extractRateSnippets(snippets: RetrievedSnippet[]) {
+  const joined = snippets.map((snippet) => snippet.content).join("\n");
+  const lines = joined
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const rates = lines
+    .filter((line) => /(price|from cad|cad \$|\$)/i.test(line))
+    .slice(0, 6);
+
+  return rates;
+}
+
+function buildDeterministicReply(options: {
+  userMessage: string;
+  businessEmail: string;
+  snippets: RetrievedSnippet[];
+}) {
+  const message = options.userMessage.toLowerCase();
+  const rates = extractRateSnippets(options.snippets);
+
+  if (/(rate|price|pricing|cost|how much)/.test(message) && rates.length > 0) {
+    return [
+      "Current room rates from our guide:",
+      ...rates.map((line) => `- ${line}`),
+      "",
+      "If you share your dates and guest count, I can suggest the best-fit room and total estimate.",
+    ].join("\n");
+  }
+
+  if (/(check-?in|check-?out|early check|late check)/.test(message)) {
+    const relevant = options.snippets
+      .map((s) => s.content)
+      .find((content) => /(check-?in|check-?out|early check|late check)/i.test(content));
+    if (relevant) return relevant;
+  }
+
+  if (/(pet|dog|animal)/.test(message)) {
+    const relevant = options.snippets
+      .map((s) => s.content)
+      .find((content) => /(pet|dog|cleaning fee|lbs)/i.test(content));
+    if (relevant) return relevant;
+  }
+
+  if (/(parking|park)/.test(message)) {
+    const relevant = options.snippets
+      .map((s) => s.content)
+      .find((content) => /(parking|self-parking|first come|cad \$?25)/i.test(content));
+    if (relevant) return relevant;
+  }
+
+  if (/(cancel|cancellation|refund policy|non-refundable|flexible rate)/.test(message)) {
+    const relevant = options.snippets
+      .map((s) => s.content)
+      .find((content) => /(cancellation|non-refundable|flexible rate|48 hours)/i.test(content));
+    if (relevant) return relevant;
+  }
+
+  if (/(breakfast|food|meal)/.test(message)) {
+    const relevant = options.snippets
+      .map((s) => s.content)
+      .find((content) => /(breakfast|cad \$?18)/i.test(content));
+    if (relevant) return relevant;
+  }
+
+  if (/(payment|visa|mastercard|amex|american express|apple pay|google pay|debit)/.test(message)) {
+    const relevant = options.snippets
+      .map((s) => s.content)
+      .find((content) => /(visa|mastercard|american express|debit|apple pay|google pay)/i.test(content));
+    if (relevant) return relevant;
+  }
+
   return null;
 }
 
@@ -694,9 +778,9 @@ async function retrieveKnowledge(businessId: string, query: string) {
           : "",
       score: (() => {
         const semantic = cosineSimilarity(queryEmbedding, toEmbeddingArray(chunk.embedding));
+        const normalizedContent = chunk.content.toLowerCase();
         const contentTerms = new Set(
-          chunk.content
-            .toLowerCase()
+          normalizedContent
             .split(/[^a-z0-9]+/g)
             .map((term) => term.trim())
             .filter((term) => term.length > 2),
@@ -708,22 +792,28 @@ async function retrieveKnowledge(businessId: string, query: string) {
             ? (chunk.metadata as Record<string, unknown>)
             : {};
         const sourceType = String(metadata.sourceType ?? "").toUpperCase();
+        const pricingPattern = /(price|pricing|rate|cad|\$|per night|nightly|from cad)/.test(
+          normalizedContent,
+        );
         const sourceBoost =
           (pricingIntent && sourceType === "PRICING" ? 0.05 : 0) +
           (policyIntent && (sourceType === "POLICY" || sourceType === "FAQ") ? 0.04 : 0) +
           (preferredSourceType && sourceType === preferredSourceType ? 0.08 : 0);
+        const contentBoost = pricingIntent && pricingPattern ? 0.12 : 0;
 
         const updatedAtMs = new Date(chunk.knowledgeItem.updatedAt).getTime();
         const recencyBoost =
           newestTimestamp > 0 ? Math.max(0, Math.min(0.05, ((updatedAtMs / newestTimestamp) - 0.96) * 1.2)) : 0;
 
-        return semantic * 0.68 + lexical * 0.24 + sourceBoost + recencyBoost;
+        return semantic * 0.64 + lexical * 0.22 + sourceBoost + contentBoost + recencyBoost;
       })(),
     }))
     .sort((left, right) => right.score - left.score)
     .filter(
       (chunk) =>
         chunk.score > (preferredSourceType ? 0.2 : 0.18) &&
+        (!pricingIntent ||
+          /(price|pricing|rate|cad|\$|per night|nightly|from cad)/.test(chunk.content.toLowerCase())) &&
         chunk.content.length >= 60 &&
         /[a-zA-Z]{3,}/.test(chunk.content) &&
         /\s/.test(chunk.content),
@@ -742,6 +832,14 @@ function buildFallbackReply(
 ) {
   if (intent === "human_handoff") {
     return `Absolutely — I can connect you with a human agent. Please share your full name and best email or phone number, and our team will follow up quickly. You can also contact ${businessEmail} directly.`;
+  }
+
+  if (intent === "support_escalation") {
+    return `I’m sorry you’re dealing with this. I can escalate this to our hotel team immediately. Please share your full name, reservation details, and what happened, or contact ${businessEmail} directly for priority support.`;
+  }
+
+  if (intent === "special_request") {
+    return `I can help with that, and this request should be handled by our team to confirm details. Please share your dates, number of rooms/guests, and contact info, or email ${businessEmail} for direct assistance.`;
   }
 
   if (intent === "refund_dispute") {
@@ -782,13 +880,23 @@ async function generateReply(options: {
 }) {
   const intent = detectIntent(options.userMessage);
   const guideFocus = detectGuideFocus(options.userMessage);
+  const topScore = options.snippets[0]?.score ?? 0;
 
-  if (intent === "human_handoff") {
+  if (intent === "human_handoff" || intent === "refund_dispute" || intent === "support_escalation" || intent === "special_request") {
     return buildFallbackReply(options.businessName, options.businessEmail, options.snippets, intent);
   }
 
   if (!chatClient) {
     return buildFallbackReply(options.businessName, options.businessEmail, options.snippets, intent);
+  }
+
+  const deterministic = buildDeterministicReply({
+    userMessage: options.userMessage,
+    businessEmail: options.businessEmail,
+    snippets: options.snippets,
+  });
+  if (deterministic) {
+    return deterministic;
   }
 
   const knowledgeBlock = options.snippets.length
@@ -832,6 +940,9 @@ async function generateReply(options: {
             "When possible, cite snippet numbers like [1] or [2] in your answer.",
             "If a clear answer exists in snippets, answer directly first, then add one optional helpful next step.",
             "If key details are missing from snippets, explicitly say what is missing and offer to collect contact/stay details for human follow-up.",
+            topScore < 0.25
+              ? "Retrieved context confidence is low. Be transparent about uncertainty and ask one concise clarifying question."
+              : "Retrieved context confidence is acceptable. Provide a direct answer grounded in snippets.",
           ].join("\n\n"),
         },
       ],
@@ -1550,6 +1661,80 @@ app.delete(
     });
 
     res.status(204).send();
+  }),
+);
+
+app.put(
+  "/api/admin/knowledge/:id",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { businessId } = req.auth!;
+    const knowledgeItemId = firstParam(req.params.id);
+    if (!knowledgeItemId) {
+      res.status(400).json({ error: "Knowledge item id is required." });
+      return;
+    }
+
+    const payload = knowledgeSchema.parse(req.body);
+    const rawContent = (payload.content ?? "").trim();
+    if (!rawContent) {
+      res.status(400).json({ error: "Provide text content before updating knowledge." });
+      return;
+    }
+
+    const existing = await prisma.knowledgeItem.findFirst({
+      where: { id: knowledgeItemId, businessId },
+    });
+    if (!existing) {
+      res.status(404).json({ error: "Knowledge item not found." });
+      return;
+    }
+
+    const chunks = chunkText(rawContent);
+    if (chunks.length === 0) {
+      res.status(400).json({ error: "No valid knowledge content found." });
+      return;
+    }
+
+    const embeddings = await Promise.all(chunks.map((chunk) => embedText(chunk)));
+    await prisma.$transaction([
+      prisma.knowledgeItem.update({
+        where: { id: existing.id },
+        data: {
+          title: payload.title,
+          sourceType: payload.sourceType,
+          rawContent,
+        },
+      }),
+      prisma.knowledgeChunk.deleteMany({
+        where: { knowledgeItemId: existing.id },
+      }),
+      prisma.knowledgeChunk.createMany({
+        data: chunks.map((chunk, index) => ({
+          businessId,
+          knowledgeItemId: existing.id,
+          content: chunk,
+          embedding: embeddings[index],
+          metadata: toPrismaJsonObject({
+            sourceType: payload.sourceType,
+            title: payload.title,
+          }),
+          sequence: index,
+        })),
+      }),
+    ]);
+
+    const item = await prisma.knowledgeItem.findUnique({
+      where: { id: existing.id },
+      include: {
+        _count: {
+          select: {
+            chunks: true,
+          },
+        },
+      },
+    });
+    res.json({ item });
   }),
 );
 

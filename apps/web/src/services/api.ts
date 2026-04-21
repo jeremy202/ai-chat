@@ -239,6 +239,9 @@ export const adminApi = {
   createKnowledge(formData: FormData) {
     return client.post<{ item: KnowledgeItem }>("/api/admin/knowledge", formData);
   },
+  updateKnowledge(id: string, payload: { title: string; sourceType: string; content: string }) {
+    return client.put<{ item: KnowledgeItem }>(`/api/admin/knowledge/${id}`, payload);
+  },
   deleteKnowledge(id: string) {
     return client.delete(`/api/admin/knowledge/${id}`);
   },

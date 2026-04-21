@@ -57,7 +57,7 @@ onMounted(async () => {
         <span class="text-xs text-slate-400">Tip: keep sections like policies, services, pricing, and FAQs in one guide.</span>
       </div>
 
-      <form class="mt-5 grid gap-4" @submit.prevent="dashboard.uploadKnowledge">
+      <form class="mt-5 grid gap-4" @submit.prevent="dashboard.editingKnowledgeId ? dashboard.saveKnowledgeEdit() : dashboard.uploadKnowledge()">
         <div class="grid gap-4 md:grid-cols-[1fr_220px]">
           <input
             v-model="dashboard.knowledgeForm.title"
@@ -85,13 +85,21 @@ onMounted(async () => {
         />
         <div class="flex justify-end">
           <button
+            v-if="dashboard.editingKnowledgeId"
+            type="button"
+            class="mr-2 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:bg-white/10"
+            @click="dashboard.cancelEditKnowledge"
+          >
+            Cancel
+          </button>
+          <button
             type="submit"
             class="inline-flex items-center gap-2 rounded-full bg-teal-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-70"
             :disabled="dashboard.savingKnowledge"
           >
             <LoaderCircle v-if="dashboard.savingKnowledge" class="h-4 w-4 animate-spin" />
             <Sparkles v-else class="h-4 w-4" />
-            {{ locale.t("dashboard.knowledge.indexButton") }}
+            {{ dashboard.editingKnowledgeId ? "Save changes" : locale.t("dashboard.knowledge.indexButton") }}
           </button>
         </div>
       </form>
@@ -110,6 +118,13 @@ onMounted(async () => {
           </div>
           <div class="flex items-center gap-2">
             <span class="rounded-full bg-teal-500/20 px-2.5 py-1 text-xs text-teal-300">{{ item._count.chunks }} {{ locale.t("dashboard.knowledge.chunks") }}</span>
+            <button
+              type="button"
+              class="inline-flex items-center gap-1 rounded-full border border-sky-300/30 bg-sky-500/10 px-2.5 py-1 text-xs font-medium text-sky-200 hover:bg-sky-500/20"
+              @click="dashboard.startEditKnowledge(item)"
+            >
+              Edit
+            </button>
             <button
               type="button"
               class="inline-flex items-center gap-1 rounded-full border border-rose-300/30 bg-rose-500/10 px-2.5 py-1 text-xs font-medium text-rose-200 hover:bg-rose-500/20"

@@ -16,6 +16,7 @@ export function useDashboardOps() {
 
   const loading = ref(true);
   const savingKnowledge = ref(false);
+  const editingKnowledgeId = ref<string | null>(null);
   const replyingConversationId = ref<string | null>(null);
   const error = ref("");
   const success = ref("");
@@ -194,6 +195,48 @@ export function useDashboardOps() {
     }
   }
 
+  function startEditKnowledge(item: KnowledgeItem) {
+    editingKnowledgeId.value = item.id;
+    knowledgeForm.title = item.title;
+    knowledgeForm.sourceType = item.sourceType;
+    knowledgeForm.content = item.rawContent;
+    success.value = "";
+    error.value = "";
+  }
+
+  function cancelEditKnowledge() {
+    editingKnowledgeId.value = null;
+    knowledgeForm.title = "";
+    knowledgeForm.sourceType = "FAQ";
+    knowledgeForm.content = "";
+  }
+
+  async function saveKnowledgeEdit() {
+    if (!editingKnowledgeId.value) return;
+    if (!knowledgeForm.title.trim() || !knowledgeForm.content.trim()) {
+      error.value = "Provide a title and content before saving changes.";
+      return;
+    }
+
+    savingKnowledge.value = true;
+    error.value = "";
+    success.value = "";
+    try {
+      await adminApi.updateKnowledge(editingKnowledgeId.value, {
+        title: knowledgeForm.title.trim(),
+        sourceType: knowledgeForm.sourceType,
+        content: knowledgeForm.content.trim(),
+      });
+      success.value = "Knowledge updated successfully.";
+      cancelEditKnowledge();
+      await loadData();
+    } catch (editError) {
+      error.value = editError instanceof Error ? editError.message : "Unable to update knowledge item.";
+    } finally {
+      savingKnowledge.value = false;
+    }
+  }
+
   async function toggleTakeover(conversation: Conversation) {
     error.value = "";
     success.value = "";
@@ -258,6 +301,7 @@ export function useDashboardOps() {
     auth,
     loading,
     savingKnowledge,
+    editingKnowledgeId,
     replyingConversationId,
     error,
     success,
@@ -280,6 +324,9 @@ export function useDashboardOps() {
     summarizeConversation,
     loadData,
     uploadKnowledge,
+    startEditKnowledge,
+    cancelEditKnowledge,
+    saveKnowledgeEdit,
     deleteKnowledge,
     toggleTakeover,
     sendReply,
