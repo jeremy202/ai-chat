@@ -26,7 +26,7 @@ async function handleSubmit() {
 
   try {
     const credentials = await signInWithEmailAndPassword(firebaseAuth, form.email, form.password);
-    const idToken = await credentials.user.getIdToken();
+    const idToken = await credentials.user.getIdToken(true);
     const { data } = await authApi.firebaseLogin({ idToken });
     auth.setSession(data);
     await router.push("/dashboard");

@@ -30,13 +30,18 @@ const optionalUrlWithDefault = (fallback: string) =>
     (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
     z.string().url().default(fallback),
   );
+const optionalTrimmedString = () =>
+  z.preprocess(
+    (value) => (typeof value === "string" ? value.trim() : value),
+    z.string().optional(),
+  );
 
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   JWT_SECRET: z.string().min(16),
-  FIREBASE_PROJECT_ID: z.string().optional(),
-  FIREBASE_CLIENT_EMAIL: z.string().optional(),
-  FIREBASE_PRIVATE_KEY: z.string().optional(),
+  FIREBASE_PROJECT_ID: optionalTrimmedString(),
+  FIREBASE_CLIENT_EMAIL: optionalTrimmedString(),
+  FIREBASE_PRIVATE_KEY: optionalTrimmedString(),
   GROQ_API_KEY: z.string().optional(),
   GROQ_BASE_URL: z.string().url().default("https://api.groq.com/openai/v1"),
   GROQ_MODEL: z.string().default("llama-3.3-70b-versatile"),
@@ -57,6 +62,17 @@ const envSchema = z.object({
 });
 
 export const env = envSchema.parse(process.env);
+
+class HttpError extends Error {
+  statusCode: number;
+  details?: Record<string, unknown>;
+
+  constructor(statusCode: number, message: string, details?: Record<string, unknown>) {
+    super(message);
+    this.statusCode = statusCode;
+    this.details = details;
+  }
+}
 
 const firebaseAdminEnabled = Boolean(
   env.FIREBASE_PROJECT_ID && env.FIREBASE_CLIENT_EMAIL && env.FIREBASE_PRIVATE_KEY,
@@ -386,10 +402,22 @@ function signToken(user: AuthToken) {
 
 async function verifyFirebaseIdToken(idToken: string) {
   if (!firebaseAdminEnabled) {
-    throw new Error("Firebase Admin SDK is not configured.");
+    throw new HttpError(503, "Firebase authentication is not configured on the server.");
   }
 
-  return getAuth().verifyIdToken(idToken);
+  try {
+    return await getAuth().verifyIdToken(idToken);
+  } catch (error) {
+    const firebaseError = error as { code?: string; message?: string };
+    console.error("Firebase token verification failed", {
+      code: firebaseError?.code,
+      message: firebaseError?.message,
+    });
+    throw new HttpError(401, "Invalid or expired Firebase token.", {
+      firebaseCode: firebaseError?.code ?? "unknown",
+      firebaseMessage: firebaseError?.message ?? "Unknown Firebase Admin verification error.",
+    });
+  }
 }
 
 function toEmbeddingArray(value: unknown): number[] {
@@ -2224,6 +2252,14 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
     res.status(400).json({
       error: "Validation failed.",
       details: error.flatten(),
+    });
+    return;
+  }
+
+  if (error instanceof HttpError) {
+    res.status(error.statusCode).json({
+      error: error.message,
+      ...(error.details ? { details: error.details } : {}),
     });
     return;
   }

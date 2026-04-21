@@ -53,7 +53,7 @@ async function handleSubmit() {
     await updateProfile(credentials.user, { displayName: form.name });
     let data;
     try {
-      const idToken = await credentials.user.getIdToken();
+      const idToken = await credentials.user.getIdToken(true);
       const signupResponse = await authApi.firebaseSignup({
         idToken,
         businessName: form.businessName,
