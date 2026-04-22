@@ -15,6 +15,11 @@ import DashboardInternalAssistantPage from "./pages/dashboard/InternalAssistantP
 import DashboardAutomationsPage from "./pages/dashboard/AutomationsPage.vue";
 import DashboardReportsPage from "./pages/dashboard/ReportsPage.vue";
 import DashboardRegionalPage from "./pages/dashboard/RegionalPage.vue";
+import PlatformLoginPage from "./pages/platform/PlatformLoginPage.vue";
+import PlatformOverviewPage from "./pages/platform/PlatformOverviewPage.vue";
+import PlatformUsersPage from "./pages/platform/PlatformUsersPage.vue";
+import PlatformBusinessesPage from "./pages/platform/PlatformBusinessesPage.vue";
+import PlatformAnalyticsPage from "./pages/platform/PlatformAnalyticsPage.vue";
 
 const router = createRouter({
   history: createWebHistory(),
@@ -111,10 +116,46 @@ const router = createRouter({
       name: "widget",
       component: WidgetEmbedPage,
     },
+    {
+      path: "/platform/login",
+      name: "platform-login",
+      component: PlatformLoginPage,
+    },
+    {
+      path: "/platform",
+      name: "platform-overview",
+      component: PlatformOverviewPage,
+      meta: { requiresSuperadmin: true },
+    },
+    {
+      path: "/platform/users",
+      name: "platform-users",
+      component: PlatformUsersPage,
+      meta: { requiresSuperadmin: true },
+    },
+    {
+      path: "/platform/businesses",
+      name: "platform-businesses",
+      component: PlatformBusinessesPage,
+      meta: { requiresSuperadmin: true },
+    },
+    {
+      path: "/platform/analytics",
+      name: "platform-analytics",
+      component: PlatformAnalyticsPage,
+      meta: { requiresSuperadmin: true },
+    },
   ],
 });
 
 router.beforeEach((to) => {
+  if (to.meta.requiresSuperadmin) {
+    const token = localStorage.getItem("ai-concierge-superadmin-token");
+    if (!token) {
+      return { name: "platform-login" };
+    }
+    return true;
+  }
   if (!to.meta.requiresAuth) {
     return true;
   }

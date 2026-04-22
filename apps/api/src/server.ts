@@ -63,6 +63,10 @@ const envSchema = z.object({
   WHATSAPP_VERIFY_TOKEN: z.string().optional(),
   WHATSAPP_ACCESS_TOKEN: z.string().optional(),
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+  SUPERADMIN_JWT_SECRET: z.string().optional(),
+  SUPERADMIN_SEED_EMAIL: z.string().email().optional(),
+  SUPERADMIN_SEED_PASSWORD: z.string().min(8).optional(),
+  SUPERADMIN_SEED_NAME: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);
@@ -115,6 +119,11 @@ if (process.env.NODE_ENV !== "production") {
   globalForPrisma.__aiConciergePrisma = prisma;
 }
 
+const prismaAny = prisma as any;
+const PLATFORM_ROLE_SUPERADMIN = "SUPERADMIN" as const;
+const BUSINESS_STATUS_ACTIVE = "ACTIVE" as const;
+const BUSINESS_STATUS_SUSPENDED = "SUSPENDED" as const;
+
 export const app = express();
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -166,6 +175,12 @@ type AuthToken = {
   userId: string;
   businessId: string;
   role: UserRole;
+  impersonatedBySuperadminId?: string;
+};
+
+type SuperadminAuthToken = {
+  superadminId: string;
+  role: "SUPERADMIN";
 };
 
 type BookingSignals = {
@@ -200,6 +215,7 @@ declare global {
   namespace Express {
     interface Request {
       auth?: AuthToken;
+      superadminAuth?: SuperadminAuthToken;
     }
   }
 }
@@ -223,6 +239,7 @@ const requireAuth = asyncHandler(async (req, res, next) => {
 
   try {
     const payload = jwt.verify(token, env.JWT_SECRET) as AuthToken;
+    await ensureBusinessActiveOrThrow(payload.businessId);
     req.auth = payload;
     next();
   } catch {
@@ -248,16 +265,46 @@ const requireAuth = asyncHandler(async (req, res, next) => {
         res.status(401).json({ error: "No workspace is linked to this Firebase account." });
         return;
       }
+      if (!(user as any).active) {
+        res.status(403).json({ error: "User account is inactive." });
+        return;
+      }
 
       req.auth = {
         userId: user.id,
         businessId: user.businessId,
         role: user.role,
       };
+      await ensureBusinessActiveOrThrow(user.businessId);
       next();
     } catch {
       res.status(401).json({ error: "Invalid token." });
     }
+  }
+});
+
+const requireSuperadminAuth = asyncHandler(async (req, res, next) => {
+  const header = req.headers.authorization;
+  const token = header?.startsWith("Bearer ") ? header.slice(7) : null;
+  if (!token) {
+    res.status(401).json({ error: "Missing superadmin bearer token." });
+    return;
+  }
+
+  try {
+    const payload = jwt.verify(token, superadminJwtSecret) as SuperadminAuthToken;
+    const superadmin = await prismaAny.superadminUser.findUnique({
+      where: { id: payload.superadminId },
+      select: { id: true, active: true, role: true },
+    });
+    if (!superadmin || !superadmin.active || superadmin.role !== PLATFORM_ROLE_SUPERADMIN) {
+      res.status(403).json({ error: "Superadmin access denied." });
+      return;
+    }
+    req.superadminAuth = payload;
+    next();
+  } catch {
+    res.status(401).json({ error: "Invalid superadmin token." });
   }
 });
 
@@ -285,6 +332,35 @@ const firebaseSignupSchema = z.object({
 
 const firebaseLoginSchema = z.object({
   idToken: z.string().min(1),
+});
+
+const platformLoginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+});
+
+const platformUserCreateSchema = z.object({
+  businessId: z.string().min(1),
+  name: z.string().min(2),
+  email: z.string().email(),
+  password: z.string().min(8),
+  role: z.enum(["OWNER", "ADMIN", "AGENT"]).default("ADMIN"),
+});
+
+const platformUserUpdateSchema = z.object({
+  name: z.string().min(2).optional(),
+  role: z.enum(["OWNER", "ADMIN", "AGENT"]).optional(),
+  active: z.boolean().optional(),
+});
+
+const platformBusinessUpdateSchema = z.object({
+  status: z.enum(["ACTIVE", "SUSPENDED"]).optional(),
+  subscriptionPlan: z.enum(["FREE", "PRO", "ENTERPRISE"]).optional(),
+  subscriptionStatus: z.enum(["NONE", "TRIALING", "ACTIVE", "PAST_DUE", "CANCELED"]).optional(),
+});
+
+const platformImpersonateSchema = z.object({
+  userId: z.string().min(1),
 });
 
 const widgetMessageSchema = z.object({
@@ -407,6 +483,40 @@ async function uniqueBusinessSlug(name: string) {
 
 function signToken(user: AuthToken) {
   return jwt.sign(user, env.JWT_SECRET, { expiresIn: "7d" });
+}
+
+const superadminJwtSecret = env.SUPERADMIN_JWT_SECRET || env.JWT_SECRET;
+
+function signSuperadminToken(superadmin: SuperadminAuthToken) {
+  return jwt.sign(superadmin, superadminJwtSecret, { expiresIn: "12h" });
+}
+
+async function ensureBusinessActiveOrThrow(businessId: string) {
+  const business = await prisma.business.findUnique({ where: { id: businessId } });
+  if (!business) {
+    throw new HttpError(401, "Business not found for authenticated user.");
+  }
+  if ((business as any).status === BUSINESS_STATUS_SUSPENDED) {
+    throw new HttpError(403, "This workspace is suspended. Contact support.");
+  }
+}
+
+async function writePlatformAuditLog(input: {
+  actorId: string;
+  action: string;
+  targetType: string;
+  targetId?: string;
+  metadata?: Record<string, unknown>;
+}) {
+  await prismaAny.platformAuditLog.create({
+    data: {
+      actorId: input.actorId,
+      action: input.action,
+      targetType: input.targetType,
+      targetId: input.targetId,
+      metadata: toPrismaJsonObject(input.metadata ?? {}),
+    },
+  });
 }
 
 async function verifyFirebaseIdToken(idToken: string) {
@@ -1430,6 +1540,24 @@ async function checkDatabaseConnection() {
   await prisma.$queryRaw`SELECT 1`;
 }
 
+async function ensureSeedSuperadmin() {
+  if (!env.SUPERADMIN_SEED_EMAIL || !env.SUPERADMIN_SEED_PASSWORD) return;
+  const email = env.SUPERADMIN_SEED_EMAIL.toLowerCase();
+  const existing = await prismaAny.superadminUser.findUnique({ where: { email } });
+  if (existing) return;
+  const passwordHash = await bcrypt.hash(env.SUPERADMIN_SEED_PASSWORD, 10);
+  await prismaAny.superadminUser.create({
+    data: {
+      name: env.SUPERADMIN_SEED_NAME?.trim() || "Platform Superadmin",
+      email,
+      passwordHash,
+      role: PLATFORM_ROLE_SUPERADMIN,
+      active: true,
+    },
+  });
+  console.info("Seeded initial superadmin user", { email });
+}
+
 app.get("/api/health", async (_req, res) => {
   let database: "ok" | "error" = "ok";
   try {
@@ -1566,7 +1694,7 @@ app.post(
       },
     });
 
-    if (!user) {
+    if (!user || !(user as any).active) {
       res.status(404).json({ error: "No workspace found for this Firebase account. Please sign up first." });
       return;
     }
@@ -1684,7 +1812,7 @@ app.post(
       },
     });
 
-    if (!user) {
+    if (!user || !(user as any).active) {
       res.status(401).json({ error: "Invalid email or password." });
       return;
     }
@@ -1744,7 +1872,7 @@ app.get(
       },
     });
 
-    if (!user) {
+    if (!user || !(user as any).active) {
       res.status(404).json({ error: "User not found." });
       return;
     }
@@ -1765,6 +1893,290 @@ app.get(
         brandColor: user.business.brandColor,
         welcomeMessage: user.business.welcomeMessage,
       },
+    });
+  }),
+);
+
+app.post(
+  "/api/platform/auth/login",
+  asyncHandler(async (req, res) => {
+    const payload = platformLoginSchema.parse(req.body);
+    const superadmin = await prismaAny.superadminUser.findUnique({
+      where: { email: payload.email.toLowerCase() },
+    });
+    if (!superadmin || !superadmin.active) {
+      res.status(401).json({ error: "Invalid superadmin credentials." });
+      return;
+    }
+    const valid = await bcrypt.compare(payload.password, superadmin.passwordHash);
+    if (!valid) {
+      res.status(401).json({ error: "Invalid superadmin credentials." });
+      return;
+    }
+    await prismaAny.superadminUser.update({
+      where: { id: superadmin.id },
+      data: { lastLoginAt: new Date() },
+    });
+    const token = signSuperadminToken({
+      superadminId: superadmin.id,
+      role: superadmin.role,
+    });
+    res.json({
+      token,
+      superadmin: {
+        id: superadmin.id,
+        name: superadmin.name,
+        email: superadmin.email,
+        role: superadmin.role,
+      },
+    });
+  }),
+);
+
+app.get(
+  "/api/platform/auth/me",
+  requireSuperadminAuth,
+  asyncHandler(async (req, res) => {
+    const auth = req.superadminAuth!;
+    const superadmin = await prismaAny.superadminUser.findUnique({
+      where: { id: auth.superadminId },
+      select: { id: true, name: true, email: true, role: true, active: true, lastLoginAt: true },
+    });
+    if (!superadmin || !superadmin.active) {
+      res.status(404).json({ error: "Superadmin not found." });
+      return;
+    }
+    res.json({ superadmin });
+  }),
+);
+
+app.get(
+  "/api/platform/users",
+  requireSuperadminAuth,
+  asyncHandler(async (req, res) => {
+    const query = String(req.query.q ?? "").trim();
+    const users = await prisma.user.findMany({
+      where: query
+        ? {
+            OR: [
+              { email: { contains: query, mode: "insensitive" } },
+              { name: { contains: query, mode: "insensitive" } },
+            ],
+          }
+        : undefined,
+      include: {
+        business: {
+          select: { id: true, name: true, slug: true } as any,
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    });
+    res.json({
+      users: users.map((user) => ({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        active: Boolean((user as any).active),
+        businessId: user.businessId,
+        business: user.business,
+        createdAt: user.createdAt,
+      })),
+    });
+  }),
+);
+
+app.post(
+  "/api/platform/users",
+  requireSuperadminAuth,
+  asyncHandler(async (req, res) => {
+    const payload = platformUserCreateSchema.parse(req.body);
+    const business = await prisma.business.findUnique({ where: { id: payload.businessId } });
+    if (!business) {
+      res.status(404).json({ error: "Business not found." });
+      return;
+    }
+    const existing = await prisma.user.findUnique({ where: { email: payload.email.toLowerCase() } });
+    if (existing) {
+      res.status(409).json({ error: "User already exists." });
+      return;
+    }
+    const passwordHash = await bcrypt.hash(payload.password, 10);
+    const user = await prismaAny.user.create({
+      data: {
+        businessId: payload.businessId,
+        name: payload.name,
+        email: payload.email.toLowerCase(),
+        passwordHash,
+        role: payload.role,
+        active: true as any,
+      },
+      include: { business: { select: { id: true, name: true, slug: true } as any } },
+    });
+    await writePlatformAuditLog({
+      actorId: req.superadminAuth!.superadminId,
+      action: "USER_CREATED",
+      targetType: "USER",
+      targetId: user.id,
+      metadata: { role: user.role, businessId: user.businessId },
+    });
+    res.status(201).json({ user });
+  }),
+);
+
+app.patch(
+  "/api/platform/users/:id",
+  requireSuperadminAuth,
+  asyncHandler(async (req, res) => {
+    const id = firstParam(req.params.id);
+    const payload = platformUserUpdateSchema.parse(req.body);
+    if (!id) {
+      res.status(400).json({ error: "User id is required." });
+      return;
+    }
+    const user = await prisma.user.update({
+      where: { id },
+      data: {
+        ...(payload.name ? { name: payload.name } : {}),
+        ...(payload.role ? { role: payload.role } : {}),
+        ...(payload.active !== undefined ? { active: payload.active as any } : {}),
+      },
+      include: { business: { select: { id: true, name: true, slug: true } as any } },
+    });
+    await writePlatformAuditLog({
+      actorId: req.superadminAuth!.superadminId,
+      action: "USER_UPDATED",
+      targetType: "USER",
+      targetId: user.id,
+      metadata: payload,
+    });
+    res.json({ user });
+  }),
+);
+
+app.get(
+  "/api/platform/businesses",
+  requireSuperadminAuth,
+  asyncHandler(async (req, res) => {
+    const query = String(req.query.q ?? "").trim();
+    const businesses = await prisma.business.findMany({
+      where: query
+        ? {
+            OR: [
+              { name: { contains: query, mode: "insensitive" } },
+              { slug: { contains: query, mode: "insensitive" } },
+              { email: { contains: query, mode: "insensitive" } },
+            ],
+          }
+        : undefined,
+      include: {
+        users: {
+          where: { role: UserRole.OWNER },
+          select: { id: true, name: true, email: true, active: true } as any,
+          take: 1,
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    });
+    res.json({ businesses });
+  }),
+);
+
+app.patch(
+  "/api/platform/businesses/:id",
+  requireSuperadminAuth,
+  asyncHandler(async (req, res) => {
+    const id = firstParam(req.params.id);
+    const payload = platformBusinessUpdateSchema.parse(req.body);
+    if (!id) {
+      res.status(400).json({ error: "Business id is required." });
+      return;
+    }
+    const business = await prisma.business.update({
+      where: { id },
+      data: {
+        ...(payload.status ? { status: payload.status } : {}),
+        ...(payload.subscriptionPlan ? { subscriptionPlan: payload.subscriptionPlan } : {}),
+        ...(payload.subscriptionStatus ? { subscriptionStatus: payload.subscriptionStatus } : {}),
+      },
+    });
+    await writePlatformAuditLog({
+      actorId: req.superadminAuth!.superadminId,
+      action: "BUSINESS_UPDATED",
+      targetType: "BUSINESS",
+      targetId: business.id,
+      metadata: payload,
+    });
+    res.json({ business });
+  }),
+);
+
+app.get(
+  "/api/platform/analytics",
+  requireSuperadminAuth,
+  asyncHandler(async (_req, res) => {
+    const [businesses, users, conversations, bookings] = await Promise.all([
+      prisma.business.count(),
+      prisma.user.count(),
+      prisma.conversation.count(),
+      prisma.booking.count(),
+    ]);
+    const suspendedBusinesses = await prismaAny.business.count({
+      where: { status: BUSINESS_STATUS_SUSPENDED },
+    });
+    res.json({
+      summary: {
+        businesses,
+        suspendedBusinesses,
+        users,
+        conversations,
+        bookings,
+      },
+    });
+  }),
+);
+
+app.post(
+  "/api/platform/impersonate",
+  requireSuperadminAuth,
+  asyncHandler(async (req, res) => {
+    const payload = platformImpersonateSchema.parse(req.body);
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      include: {
+        business: {
+          select: { id: true, name: true, slug: true, email: true, websiteUrl: true, brandColor: true, welcomeMessage: true },
+        },
+      },
+    });
+    if (!user || !(user as any).active) {
+      res.status(404).json({ error: "Active user not found for impersonation." });
+      return;
+    }
+    const token = signToken({
+      userId: user.id,
+      businessId: user.businessId,
+      role: user.role,
+      impersonatedBySuperadminId: req.superadminAuth!.superadminId,
+    });
+    await writePlatformAuditLog({
+      actorId: req.superadminAuth!.superadminId,
+      action: "IMPERSONATION_STARTED",
+      targetType: "USER",
+      targetId: user.id,
+      metadata: { businessId: user.businessId },
+    });
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+      business: user.business,
     });
   }),
 );
@@ -3028,6 +3440,10 @@ process.on("unhandledRejection", (reason) => {
 
 process.on("uncaughtException", (error) => {
   console.error("Uncaught exception", error);
+});
+
+ensureSeedSuperadmin().catch((error) => {
+  console.error("Failed to seed superadmin", error);
 });
 
 const isVercelRuntime = process.env.VERCEL === "1";

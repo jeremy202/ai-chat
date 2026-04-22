@@ -27,6 +27,10 @@ const client = axios.create({
   baseURL: apiBaseUrl,
 });
 
+const platformClient = axios.create({
+  baseURL: apiBaseUrl,
+});
+
 client.interceptors.request.use((config) => {
   const requestUrl = String(config.url ?? "");
   const isWidgetPublicRequest =
@@ -45,11 +49,27 @@ client.interceptors.request.use((config) => {
   return config;
 });
 
+platformClient.interceptors.request.use((config) => {
+  const token = localStorage.getItem("ai-concierge-superadmin-token");
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 export function setAuthToken(token: string | null) {
   if (token) {
     localStorage.setItem("ai-concierge-token", token);
   } else {
     localStorage.removeItem("ai-concierge-token");
+  }
+}
+
+export function setSuperadminAuthToken(token: string | null) {
+  if (token) {
+    localStorage.setItem("ai-concierge-superadmin-token", token);
+  } else {
+    localStorage.removeItem("ai-concierge-superadmin-token");
   }
 }
 
@@ -69,6 +89,8 @@ export type AuthUser = {
   email: string;
   role: string;
 };
+
+export type UserRole = "OWNER" | "ADMIN" | "AGENT";
 
 export type AuthResponse = {
   token: string;
@@ -196,6 +218,57 @@ export type RegionalSettings = {
   province: string;
   timezone: string;
   currency: "CAD";
+};
+
+export type SuperadminUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: "SUPERADMIN";
+  active?: boolean;
+  lastLoginAt?: string | null;
+};
+
+export type PlatformSession = {
+  token: string;
+  superadmin: SuperadminUser;
+};
+
+export type PlatformManagedUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: "OWNER" | "ADMIN" | "AGENT";
+  active: boolean;
+  businessId: string;
+  business: {
+    id: string;
+    name: string;
+    slug: string;
+    status: "ACTIVE" | "SUSPENDED";
+  };
+  createdAt: string;
+};
+
+export type PlatformBusiness = {
+  id: string;
+  name: string;
+  slug: string;
+  email: string;
+  websiteUrl?: string | null;
+  status: "ACTIVE" | "SUSPENDED";
+  subscriptionPlan: "FREE" | "PRO" | "ENTERPRISE";
+  subscriptionStatus: "NONE" | "TRIALING" | "ACTIVE" | "PAST_DUE" | "CANCELED";
+  users: Array<{ id: string; name: string; email: string; active: boolean }>;
+  createdAt: string;
+};
+
+export type PlatformAnalyticsSummary = {
+  businesses: number;
+  suspendedBusinesses: number;
+  users: number;
+  conversations: number;
+  bookings: number;
 };
 
 export const authApi = {
@@ -384,6 +457,51 @@ export const widgetApi = {
   },
   getConversation(slug: string, conversationId: string) {
     return client.get<WidgetConversationResponse>(`/api/widget/${slug}/conversations/${conversationId}`);
+  },
+};
+
+export const platformApi = {
+  login(payload: { email: string; password: string }) {
+    return platformClient.post<PlatformSession>("/api/platform/auth/login", payload);
+  },
+  me() {
+    return platformClient.get<{ superadmin: SuperadminUser }>("/api/platform/auth/me");
+  },
+  getUsers(query = "") {
+    const suffix = query.trim() ? `?q=${encodeURIComponent(query.trim())}` : "";
+    return platformClient.get<{ users: PlatformManagedUser[] }>(`/api/platform/users${suffix}`);
+  },
+  createUser(payload: {
+    businessId: string;
+    name: string;
+    email: string;
+    password: string;
+    role: "OWNER" | "ADMIN" | "AGENT";
+  }) {
+    return platformClient.post<{ user: PlatformManagedUser }>("/api/platform/users", payload);
+  },
+  updateUser(id: string, payload: { name?: string; role?: "OWNER" | "ADMIN" | "AGENT"; active?: boolean }) {
+    return platformClient.patch<{ user: PlatformManagedUser }>(`/api/platform/users/${id}`, payload);
+  },
+  getBusinesses(query = "") {
+    const suffix = query.trim() ? `?q=${encodeURIComponent(query.trim())}` : "";
+    return platformClient.get<{ businesses: PlatformBusiness[] }>(`/api/platform/businesses${suffix}`);
+  },
+  updateBusiness(
+    id: string,
+    payload: {
+      status?: "ACTIVE" | "SUSPENDED";
+      subscriptionPlan?: "FREE" | "PRO" | "ENTERPRISE";
+      subscriptionStatus?: "NONE" | "TRIALING" | "ACTIVE" | "PAST_DUE" | "CANCELED";
+    },
+  ) {
+    return platformClient.patch<{ business: PlatformBusiness }>(`/api/platform/businesses/${id}`, payload);
+  },
+  getAnalytics() {
+    return platformClient.get<{ summary: PlatformAnalyticsSummary }>("/api/platform/analytics");
+  },
+  impersonate(userId: string) {
+    return platformClient.post<AuthResponse>("/api/platform/impersonate", { userId });
   },
 };
 

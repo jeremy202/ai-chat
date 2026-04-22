@@ -68,6 +68,26 @@ The assistant is designed to:
 └── package.json
 ```
 
+## Superadmin quick start
+
+Platform superadmin is separate from tenant login.
+
+1. Set API environment variables:
+   - `SUPERADMIN_JWT_SECRET`
+   - `SUPERADMIN_SEED_EMAIL`
+   - `SUPERADMIN_SEED_PASSWORD`
+   - `SUPERADMIN_SEED_NAME` (optional)
+2. Restart the backend once to auto-seed the first superadmin.
+3. Open `/platform/login` in the web app.
+4. Manage platform entities:
+   - `/platform/users`
+   - `/platform/businesses`
+   - `/platform/analytics`
+
+Notes:
+- Superadmin auth uses API-side bcrypt credentials (not Firebase).
+- Impersonation creates an audited tenant session for support/debug operations.
+
 ## Full system architecture
 
 ### 1. Hosted business dashboard
