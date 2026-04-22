@@ -15,6 +15,7 @@ import OpenAI from "openai";
 import {
   AnalyticsEventType,
   BookingStatus,
+  ConversationChannel,
   ConversationStatus,
   LeadStatus,
   MessageRole,
@@ -59,6 +60,9 @@ const envSchema = z.object({
   SMTP_FROM: z.string().default("AI Concierge <noreply@aiconciergeassistant.com>"),
   WEB_APP_URL: optionalUrlWithDefault("http://localhost:5173"),
   API_URL: optionalUrlWithDefault("http://localhost:8080"),
+  WHATSAPP_VERIFY_TOKEN: z.string().optional(),
+  WHATSAPP_ACCESS_TOKEN: z.string().optional(),
+  WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);
@@ -999,6 +1003,219 @@ function stripTrailingSlash(value: string) {
 function toStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.map((item) => String(item)).filter(Boolean);
+}
+
+function normalizePhoneNumber(value: string | undefined | null) {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return trimmed.replace(/[^\d+]/g, "");
+}
+
+async function sendWhatsAppMessage(toPhone: string, text: string) {
+  if (!env.WHATSAPP_ACCESS_TOKEN || !env.WHATSAPP_PHONE_NUMBER_ID) {
+    return { delivered: false, reason: "WhatsApp env not configured" };
+  }
+
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/v20.0/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${env.WHATSAPP_ACCESS_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to: toPhone,
+          type: "text",
+          text: { body: text.slice(0, 4000) },
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      const body = await response.text();
+      console.error("WhatsApp API send failed", response.status, body);
+      return { delivered: false, reason: `HTTP ${response.status}` };
+    }
+
+    return { delivered: true };
+  } catch (error) {
+    console.error("WhatsApp API send exception", error);
+    return { delivered: false, reason: "Exception while sending message" };
+  }
+}
+
+async function processGuestMessage(options: {
+  business: {
+    id: string;
+    name: string;
+    slug: string;
+    email: string;
+    welcomeMessage: string;
+  };
+  message: string;
+  source: "widget" | "whatsapp";
+  conversationId?: string;
+  visitorName?: string;
+  visitorEmail?: string;
+  visitorPhone?: string;
+}) {
+  const { business } = options;
+
+  const normalizedVisitorPhone = normalizePhoneNumber(options.visitorPhone);
+  const normalizedVisitorEmail = options.visitorEmail?.trim() || undefined;
+  const normalizedVisitorName = options.visitorName?.trim() || undefined;
+
+  let conversation =
+    options.conversationId &&
+    (await prisma.conversation.findFirst({
+      where: {
+        id: options.conversationId,
+        businessId: business.id,
+      },
+    }));
+
+  if (!conversation && options.source === "whatsapp" && normalizedVisitorPhone) {
+    conversation = await prisma.conversation.findFirst({
+      where: {
+        businessId: business.id,
+        channel: ConversationChannel.EMAIL,
+        visitorPhone: normalizedVisitorPhone,
+      },
+      orderBy: { updatedAt: "desc" },
+    });
+  }
+
+  if (!conversation) {
+    conversation = await prisma.conversation.create({
+      data: {
+        businessId: business.id,
+        channel: options.source === "whatsapp" ? ConversationChannel.EMAIL : ConversationChannel.WIDGET,
+        visitorName: normalizedVisitorName,
+        visitorEmail: normalizedVisitorEmail || null,
+        visitorPhone: normalizedVisitorPhone || null,
+        lastCustomerMessageAt: new Date(),
+      },
+    });
+
+    await trackEvent(business.id, AnalyticsEventType.CHAT_STARTED, conversation.id, {
+      source: options.source,
+    });
+  }
+
+  await prisma.message.create({
+    data: {
+      businessId: business.id,
+      conversationId: conversation.id,
+      role: MessageRole.USER,
+      content: options.message,
+      metadata: toPrismaJsonObject({
+        intent: detectIntent(options.message),
+        source: options.source,
+      }),
+    },
+  });
+
+  await prisma.conversation.update({
+    where: { id: conversation.id },
+    data: {
+      visitorName: normalizedVisitorName || conversation.visitorName,
+      visitorEmail: normalizedVisitorEmail || conversation.visitorEmail,
+      visitorPhone: normalizedVisitorPhone || conversation.visitorPhone,
+      lastCustomerMessageAt: new Date(),
+    },
+  });
+
+  const history = await prisma.message.findMany({
+    where: { conversationId: conversation.id },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const signals = extractBookingSignals(options.message);
+  const booking = await maybeUpsertBooking({
+    businessId: business.id,
+    businessName: business.name,
+    businessEmail: business.email,
+    conversationId: conversation.id,
+    existingLeadStatus: conversation.leadStatus,
+    message: options.message,
+    signals,
+  });
+
+  let assistantMessageContent = HANDOFF_MESSAGE;
+  if (conversation.status !== ConversationStatus.HUMAN) {
+    const snippets = await retrieveKnowledge(business.id, options.message);
+    assistantMessageContent = await generateReply({
+      businessName: business.name,
+      businessEmail: business.email,
+      welcomeMessage: business.welcomeMessage,
+      userMessage: options.message,
+      history: history.map((message) => ({
+        role: message.role,
+        content: message.content,
+      })),
+      snippets,
+    });
+
+    const delivery =
+      options.source === "whatsapp" && normalizedVisitorPhone
+        ? await sendWhatsAppMessage(normalizedVisitorPhone, assistantMessageContent)
+        : null;
+
+    await prisma.message.create({
+      data: {
+        businessId: business.id,
+        conversationId: conversation.id,
+        role: MessageRole.ASSISTANT,
+        content: assistantMessageContent,
+        metadata: toPrismaJsonObject({
+          intent: detectIntent(options.message),
+          snippetCount: snippets.length,
+          source: options.source,
+          whatsappDelivered: delivery?.delivered,
+          whatsappDeliveryReason: delivery?.reason,
+        }),
+      },
+    });
+  } else {
+    const latestSystemMessage = history
+      .slice()
+      .reverse()
+      .find((message) => message.role === MessageRole.SYSTEM);
+
+    if (latestSystemMessage?.content !== HANDOFF_MESSAGE) {
+      await prisma.message.create({
+        data: {
+          businessId: business.id,
+          conversationId: conversation.id,
+          role: MessageRole.SYSTEM,
+          content: HANDOFF_MESSAGE,
+          metadata: toPrismaJsonObject({ source: options.source }),
+        },
+      });
+    }
+  }
+
+  const updatedConversation = await prisma.conversation.update({
+    where: { id: conversation.id },
+    data: {
+      lastAssistantMessageAt: new Date(),
+    },
+    include: {
+      messages: {
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  });
+
+  return {
+    conversation: updatedConversation,
+    booking,
+    assistantMessage: assistantMessageContent,
+  };
 }
 
 function hasSchedulingConflict(
@@ -2570,6 +2787,184 @@ app.post(
         updatedConversation.messages[updatedConversation.messages.length - 1]?.content ??
         assistantMessageContent,
     });
+  }),
+);
+
+app.get(
+  "/api/whatsapp/:slug/webhook",
+  asyncHandler(async (req, res) => {
+    const slug = firstParam(req.params.slug);
+    const mode = String(req.query["hub.mode"] ?? "");
+    const verifyToken = String(req.query["hub.verify_token"] ?? "");
+    const challenge = String(req.query["hub.challenge"] ?? "");
+
+    if (!slug) {
+      res.status(400).json({ error: "Business slug is required." });
+      return;
+    }
+    if (mode !== "subscribe") {
+      res.status(400).json({ error: "Invalid webhook mode." });
+      return;
+    }
+    if (!env.WHATSAPP_VERIFY_TOKEN || verifyToken !== env.WHATSAPP_VERIFY_TOKEN) {
+      res.status(403).json({ error: "Invalid WhatsApp verify token." });
+      return;
+    }
+
+    res.status(200).send(challenge);
+  }),
+);
+
+app.post(
+  "/api/whatsapp/:slug/webhook",
+  asyncHandler(async (req, res) => {
+    const slug = firstParam(req.params.slug);
+    if (!slug) {
+      res.status(400).json({ error: "Business slug is required." });
+      return;
+    }
+
+    const business = await prisma.business.findUnique({
+      where: { slug },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        email: true,
+        welcomeMessage: true,
+      },
+    });
+    if (!business) {
+      res.status(404).json({ error: "Business not found." });
+      return;
+    }
+
+    const entryList = Array.isArray((req.body as { entry?: unknown[] }).entry)
+      ? ((req.body as { entry: unknown[] }).entry as unknown[])
+      : [];
+
+    for (const entry of entryList) {
+      const changes = Array.isArray((entry as { changes?: unknown[] }).changes)
+        ? ((entry as { changes: unknown[] }).changes as unknown[])
+        : [];
+
+      for (const change of changes) {
+        const value = (change as { value?: Record<string, unknown> }).value ?? {};
+        const contacts = Array.isArray(value.contacts) ? (value.contacts as Array<Record<string, unknown>>) : [];
+        const messages = Array.isArray(value.messages) ? (value.messages as Array<Record<string, unknown>>) : [];
+
+        for (const incoming of messages) {
+          const fromPhone = normalizePhoneNumber(String(incoming.from ?? ""));
+          const textBody = String(
+            ((incoming.text as Record<string, unknown> | undefined)?.body as string | undefined) ?? "",
+          ).trim();
+          if (!fromPhone || !textBody) continue;
+
+          const contact = contacts.find((item) => String(item.wa_id ?? "") === fromPhone);
+          const profile = (contact?.profile as Record<string, unknown> | undefined) ?? {};
+          const visitorName = String(profile.name ?? "").trim() || undefined;
+
+          await processGuestMessage({
+            business,
+            message: textBody,
+            source: "whatsapp",
+            visitorName,
+            visitorPhone: fromPhone,
+          });
+        }
+      }
+    }
+
+    res.status(200).json({ received: true });
+  }),
+);
+
+app.get(
+  "/api/whatsapp/:slug/webhook",
+  asyncHandler(async (req, res) => {
+    const slug = firstParam(req.params.slug);
+    const mode = String(req.query["hub.mode"] ?? "");
+    const verifyToken = String(req.query["hub.verify_token"] ?? "");
+    const challenge = String(req.query["hub.challenge"] ?? "");
+
+    if (!slug) {
+      res.status(400).json({ error: "Business slug is required." });
+      return;
+    }
+    if (mode !== "subscribe") {
+      res.status(400).json({ error: "Invalid webhook mode." });
+      return;
+    }
+    if (!env.WHATSAPP_VERIFY_TOKEN || verifyToken !== env.WHATSAPP_VERIFY_TOKEN) {
+      res.status(403).json({ error: "Invalid WhatsApp verify token." });
+      return;
+    }
+
+    res.status(200).send(challenge);
+  }),
+);
+
+app.post(
+  "/api/whatsapp/:slug/webhook",
+  asyncHandler(async (req, res) => {
+    const slug = firstParam(req.params.slug);
+    if (!slug) {
+      res.status(400).json({ error: "Business slug is required." });
+      return;
+    }
+
+    const business = await prisma.business.findUnique({
+      where: { slug },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        email: true,
+        welcomeMessage: true,
+      },
+    });
+    if (!business) {
+      res.status(404).json({ error: "Business not found." });
+      return;
+    }
+
+    const entryList = Array.isArray((req.body as { entry?: unknown[] }).entry)
+      ? ((req.body as { entry: unknown[] }).entry as unknown[])
+      : [];
+
+    for (const entry of entryList) {
+      const changes = Array.isArray((entry as { changes?: unknown[] }).changes)
+        ? ((entry as { changes: unknown[] }).changes as unknown[])
+        : [];
+
+      for (const change of changes) {
+        const value = (change as { value?: Record<string, unknown> }).value ?? {};
+        const contacts = Array.isArray(value.contacts) ? (value.contacts as Array<Record<string, unknown>>) : [];
+        const messages = Array.isArray(value.messages) ? (value.messages as Array<Record<string, unknown>>) : [];
+
+        for (const incoming of messages) {
+          const fromPhone = normalizePhoneNumber(String(incoming.from ?? ""));
+          const textBody = String(
+            ((incoming.text as Record<string, unknown> | undefined)?.body as string | undefined) ?? "",
+          ).trim();
+          if (!fromPhone || !textBody) continue;
+
+          const contact = contacts.find((item) => String(item.wa_id ?? "") === fromPhone);
+          const profile = (contact?.profile as Record<string, unknown> | undefined) ?? {};
+          const visitorName = String(profile.name ?? "").trim() || undefined;
+
+          await processGuestMessage({
+            business,
+            message: textBody,
+            source: "whatsapp",
+            visitorName,
+            visitorPhone: fromPhone,
+          });
+        }
+      }
+    }
+
+    res.status(200).json({ received: true });
   }),
 );
 
