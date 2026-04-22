@@ -59,7 +59,7 @@ async function runAutomation(id: string) {
 }
 
 onMounted(async () => {
-  const ok = await dashboard.initialize(router);
+  const ok = await dashboard.initialize(router, { skipDataLoad: true });
   if (!ok) return;
   await loadAutomations();
 });

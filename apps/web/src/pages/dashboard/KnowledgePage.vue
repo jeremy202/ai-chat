@@ -18,7 +18,7 @@ function presetCompanyGuide() {
 }
 
 onMounted(async () => {
-  await dashboard.initialize(router);
+  await dashboard.initialize(router, { sections: ["knowledge"] });
 });
 </script>
 
@@ -30,7 +30,7 @@ onMounted(async () => {
     :loading="dashboard.loading"
     :error="dashboard.error"
     :success="dashboard.success"
-    @refresh="dashboard.loadData"
+    @refresh="dashboard.loadData({ sections: ['knowledge'] })"
     @logout="dashboard.logout(router)"
   >
     <article class="rounded-2xl border border-white/10 bg-slate-900/70 p-6">

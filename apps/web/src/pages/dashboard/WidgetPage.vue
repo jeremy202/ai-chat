@@ -11,7 +11,7 @@ const dashboard = useDashboardOps();
 const locale = useLocaleStore();
 
 onMounted(async () => {
-  await dashboard.initialize(router);
+  await dashboard.initialize(router, { sections: ["widget"] });
 });
 </script>
 
@@ -23,7 +23,7 @@ onMounted(async () => {
     :loading="dashboard.loading"
     :error="dashboard.error"
     :success="dashboard.success"
-    @refresh="dashboard.loadData"
+    @refresh="dashboard.loadData({ sections: ['widget'] })"
     @logout="dashboard.logout(router)"
   >
     <article class="rounded-2xl border border-white/10 bg-slate-900/70 p-6">

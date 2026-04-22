@@ -1778,6 +1778,15 @@ app.get(
     const [business, conversations, bookings] = await Promise.all([
       prisma.business.findUnique({
         where: { id: businessId },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          email: true,
+          websiteUrl: true,
+          brandColor: true,
+          welcomeMessage: true,
+        },
       }),
       prisma.conversation.findMany({
         where: { businessId },
@@ -1809,7 +1818,15 @@ app.get(
       totalChats === 0 ? 0 : Number(((qualifiedLeads / totalChats) * 100).toFixed(1));
 
     res.json({
-      business,
+      business: {
+        id: business.id,
+        name: business.name,
+        slug: business.slug,
+        email: business.email,
+        websiteUrl: business.websiteUrl,
+        brandColor: business.brandColor,
+        welcomeMessage: business.welcomeMessage,
+      },
       metrics: {
         totalChats,
         qualifiedLeads,
@@ -2177,6 +2194,15 @@ app.get(
     const widgetUrls = resolveWidgetSnippetUrls(req);
     const business = await prisma.business.findUnique({
       where: { id: businessId },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        email: true,
+        websiteUrl: true,
+        brandColor: true,
+        welcomeMessage: true,
+      },
     });
 
     if (!business) {
@@ -2196,10 +2222,7 @@ app.get(
       },
       widgetSnippet: formatWidgetSnippet(business.slug, widgetUrls),
       whatsappWebhookUrl: `${widgetUrls.apiBaseUrl}/api/whatsapp/${business.slug}/webhook`,
-      whatsappConfigured: Boolean(
-        (business as Record<string, unknown>).whatsappAccessToken &&
-          (business as Record<string, unknown>).whatsappPhoneNumberId,
-      ),
+      whatsappConfigured: false,
     });
   }),
 );

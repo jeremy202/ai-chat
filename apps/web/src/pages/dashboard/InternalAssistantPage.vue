@@ -31,7 +31,7 @@ async function ask() {
 }
 
 onMounted(async () => {
-  await dashboard.initialize(router);
+  await dashboard.initialize(router, { skipDataLoad: true });
 });
 </script>
 
@@ -43,7 +43,7 @@ onMounted(async () => {
     :loading="dashboard.loading"
     :error="dashboard.error"
     :success="dashboard.success"
-    @refresh="dashboard.loadData"
+    @refresh="dashboard.initialize(router, { skipDataLoad: true })"
     @logout="dashboard.logout(router)"
   >
     <article class="dashboard-card">

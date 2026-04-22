@@ -10,6 +10,8 @@ import {
 import { useAuthStore } from "../stores/auth";
 import { useLocaleStore } from "../stores/locale";
 
+type DashboardDataSection = "overview" | "knowledge" | "conversations" | "bookings" | "widget";
+
 export function useDashboardOps() {
   const auth = useAuthStore();
   const locale = useLocaleStore();
@@ -135,27 +137,58 @@ export function useDashboardOps() {
     return latest?.content ?? locale.t("dashboard.common.noMessages");
   }
 
-  async function loadData() {
+  async function loadData(options?: { sections?: DashboardDataSection[] }) {
     loading.value = true;
     error.value = "";
 
     try {
-      const [overviewResponse, knowledgeResponse, conversationResponse, bookingResponse, widgetResponse] =
-        await Promise.all([
-          adminApi.getOverview(),
-          adminApi.getKnowledge(),
-          adminApi.getConversations(),
-          adminApi.getBookings(),
-          adminApi.getWidgetSettings(),
-        ]);
+      const requested = new Set<DashboardDataSection>(
+        options?.sections?.length
+          ? options.sections
+          : ["overview", "knowledge", "conversations", "bookings", "widget"],
+      );
 
-      overview.value = overviewResponse.data;
-      knowledgeItems.value = knowledgeResponse.data.items;
-      conversations.value = conversationResponse.data.conversations;
-      bookings.value = bookingResponse.data.bookings;
-      widgetSnippet.value = widgetResponse.data.widgetSnippet;
-      whatsappWebhookUrl.value = widgetResponse.data.whatsappWebhookUrl ?? "";
-      whatsappConfigured.value = Boolean(widgetResponse.data.whatsappConfigured);
+      const tasks: Promise<void>[] = [];
+
+      if (requested.has("overview")) {
+        tasks.push(
+          adminApi.getOverview().then(({ data }) => {
+            overview.value = data;
+          }),
+        );
+      }
+      if (requested.has("knowledge")) {
+        tasks.push(
+          adminApi.getKnowledge().then(({ data }) => {
+            knowledgeItems.value = data.items;
+          }),
+        );
+      }
+      if (requested.has("conversations")) {
+        tasks.push(
+          adminApi.getConversations().then(({ data }) => {
+            conversations.value = data.conversations;
+          }),
+        );
+      }
+      if (requested.has("bookings")) {
+        tasks.push(
+          adminApi.getBookings().then(({ data }) => {
+            bookings.value = data.bookings;
+          }),
+        );
+      }
+      if (requested.has("widget")) {
+        tasks.push(
+          adminApi.getWidgetSettings().then(({ data }) => {
+            widgetSnippet.value = data.widgetSnippet;
+            whatsappWebhookUrl.value = data.whatsappWebhookUrl ?? "";
+            whatsappConfigured.value = Boolean(data.whatsappConfigured);
+          }),
+        );
+      }
+
+      await Promise.all(tasks);
     } catch (loadError) {
       error.value =
         loadError instanceof Error ? loadError.message : "Unable to load your hospitality dashboard.";
@@ -185,7 +218,7 @@ export function useDashboardOps() {
       knowledgeForm.sourceType = "FAQ";
       knowledgeForm.content = "";
       success.value = "Knowledge indexed successfully. AI will now use it in responses.";
-      await loadData();
+      await loadData({ sections: ["knowledge"] });
     } catch (uploadError) {
       error.value = uploadError instanceof Error ? uploadError.message : "Could not upload knowledge.";
     } finally {
@@ -199,7 +232,7 @@ export function useDashboardOps() {
     try {
       await adminApi.deleteKnowledge(id);
       success.value = "Knowledge item deleted.";
-      await loadData();
+      await loadData({ sections: ["knowledge"] });
     } catch (deleteError) {
       error.value = deleteError instanceof Error ? deleteError.message : "Unable to delete knowledge item.";
     }
@@ -239,7 +272,7 @@ export function useDashboardOps() {
       });
       success.value = "Knowledge updated successfully.";
       cancelEditKnowledge();
-      await loadData();
+      await loadData({ sections: ["knowledge"] });
     } catch (editError) {
       error.value = editError instanceof Error ? editError.message : "Unable to update knowledge item.";
     } finally {
@@ -256,7 +289,7 @@ export function useDashboardOps() {
         conversation.status === "HUMAN"
           ? "Conversation returned to AI mode."
           : "Conversation moved to human handoff.";
-      await loadData();
+      await loadData({ sections: ["conversations", "overview"] });
     } catch (toggleError) {
       error.value =
         toggleError instanceof Error ? toggleError.message : "Unable to update handoff state.";
@@ -275,7 +308,7 @@ export function useDashboardOps() {
       await adminApi.sendAdminReply(conversationId, content);
       replyDrafts[conversationId] = "";
       success.value = "Reply sent.";
-      await loadData();
+      await loadData({ sections: ["conversations", "overview"] });
     } catch (replyError) {
       error.value = replyError instanceof Error ? replyError.message : "Unable to send admin reply.";
     } finally {
@@ -317,7 +350,7 @@ export function useDashboardOps() {
       });
       whatsappConfigured.value = Boolean(response.data.whatsappConfigured);
       success.value = "WhatsApp is now configured for this business.";
-      await loadData();
+      await loadData({ sections: ["widget"] });
     } catch (saveError) {
       error.value = saveError instanceof Error ? saveError.message : "Unable to save WhatsApp settings.";
     } finally {
@@ -325,13 +358,15 @@ export function useDashboardOps() {
     }
   }
 
-  async function initialize(router: Router) {
+  async function initialize(router: Router, options?: { sections?: DashboardDataSection[]; skipDataLoad?: boolean }) {
     await auth.hydrate();
     if (!auth.isAuthenticated) {
       await router.push("/login");
       return false;
     }
-    await loadData();
+    if (!options?.skipDataLoad) {
+      await loadData({ sections: options?.sections });
+    }
     return true;
   }
 
