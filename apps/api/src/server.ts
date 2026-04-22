@@ -82,6 +82,13 @@ class HttpError extends Error {
   }
 }
 
+function isMissingSuperadminTableError(error: unknown) {
+  const candidate = error as { code?: string; message?: string };
+  if (candidate?.code === "P2021") return true;
+  const message = String(candidate?.message ?? "").toLowerCase();
+  return message.includes("superadmin_users") || message.includes("platform_audit_logs");
+}
+
 const firebaseAdminEnabled = Boolean(
   env.FIREBASE_PROJECT_ID && env.FIREBASE_CLIENT_EMAIL && env.FIREBASE_PRIVATE_KEY,
 );
@@ -293,10 +300,22 @@ const requireSuperadminAuth = asyncHandler(async (req, res, next) => {
 
   try {
     const payload = jwt.verify(token, superadminJwtSecret) as SuperadminAuthToken;
-    const superadmin = await prismaAny.superadminUser.findUnique({
-      where: { id: payload.superadminId },
-      select: { id: true, active: true, role: true },
-    });
+    let superadmin;
+    try {
+      superadmin = await prismaAny.superadminUser.findUnique({
+        where: { id: payload.superadminId },
+        select: { id: true, active: true, role: true },
+      });
+    } catch (error) {
+      if (isMissingSuperadminTableError(error)) {
+        res.status(503).json({
+          error:
+            "Superadmin is not initialized in this environment yet. Run database schema sync and seed superadmin credentials.",
+        });
+        return;
+      }
+      throw error;
+    }
     if (!superadmin || !superadmin.active || superadmin.role !== PLATFORM_ROLE_SUPERADMIN) {
       res.status(403).json({ error: "Superadmin access denied." });
       return;
@@ -1901,9 +1920,21 @@ app.post(
   "/api/platform/auth/login",
   asyncHandler(async (req, res) => {
     const payload = platformLoginSchema.parse(req.body);
-    const superadmin = await prismaAny.superadminUser.findUnique({
-      where: { email: payload.email.toLowerCase() },
-    });
+    let superadmin;
+    try {
+      superadmin = await prismaAny.superadminUser.findUnique({
+        where: { email: payload.email.toLowerCase() },
+      });
+    } catch (error) {
+      if (isMissingSuperadminTableError(error)) {
+        res.status(503).json({
+          error:
+            "Superadmin is not initialized in this environment yet. Run database schema sync and seed superadmin credentials.",
+        });
+        return;
+      }
+      throw error;
+    }
     if (!superadmin || !superadmin.active) {
       res.status(401).json({ error: "Invalid superadmin credentials." });
       return;
@@ -1913,10 +1944,21 @@ app.post(
       res.status(401).json({ error: "Invalid superadmin credentials." });
       return;
     }
-    await prismaAny.superadminUser.update({
-      where: { id: superadmin.id },
-      data: { lastLoginAt: new Date() },
-    });
+    try {
+      await prismaAny.superadminUser.update({
+        where: { id: superadmin.id },
+        data: { lastLoginAt: new Date() },
+      });
+    } catch (error) {
+      if (isMissingSuperadminTableError(error)) {
+        res.status(503).json({
+          error:
+            "Superadmin is not initialized in this environment yet. Run database schema sync and seed superadmin credentials.",
+        });
+        return;
+      }
+      throw error;
+    }
     const token = signSuperadminToken({
       superadminId: superadmin.id,
       role: superadmin.role,
