@@ -76,7 +76,12 @@ async function handleSubmit() {
     auth.setSession(data);
     await router.push("/dashboard");
   } catch (submissionError) {
-    error.value = "Unable to create your workspace. Check the form details and try again.";
+    const authError = submissionError as FirebaseAuthError;
+    if (authError.code === "auth/network-request-failed") {
+      error.value = "Cannot reach Firebase Auth. Check internet, VPN/firewall, and try again.";
+    } else {
+      error.value = "Unable to create your workspace. Check the form details and try again.";
+    }
     console.error(submissionError);
   } finally {
     isSubmitting.value = false;

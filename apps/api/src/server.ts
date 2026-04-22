@@ -358,6 +358,9 @@ const settingsSchema = z.object({
   brandColor: z.string().regex(/^#(?:[0-9a-fA-F]{3}){1,2}$/),
   welcomeMessage: z.string().min(10),
   websiteUrl: z.string().url().optional().or(z.literal("")),
+  whatsappVerifyToken: z.string().optional(),
+  whatsappAccessToken: z.string().optional(),
+  whatsappPhoneNumberId: z.string().optional(),
 });
 
 const knowledgeSchema = z.object({
@@ -1012,25 +1015,32 @@ function normalizePhoneNumber(value: string | undefined | null) {
   return trimmed.replace(/[^\d+]/g, "");
 }
 
-async function sendWhatsAppMessage(toPhone: string, text: string) {
-  if (!env.WHATSAPP_ACCESS_TOKEN || !env.WHATSAPP_PHONE_NUMBER_ID) {
+async function sendWhatsAppMessage(options: {
+  toPhone: string;
+  text: string;
+  accessToken?: string | null;
+  phoneNumberId?: string | null;
+}) {
+  const accessToken = options.accessToken || env.WHATSAPP_ACCESS_TOKEN;
+  const phoneNumberId = options.phoneNumberId || env.WHATSAPP_PHONE_NUMBER_ID;
+  if (!accessToken || !phoneNumberId) {
     return { delivered: false, reason: "WhatsApp env not configured" };
   }
 
   try {
     const response = await fetch(
-      `https://graph.facebook.com/v20.0/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`,
+      `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`,
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${env.WHATSAPP_ACCESS_TOKEN}`,
+          Authorization: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           messaging_product: "whatsapp",
-          to: toPhone,
+          to: options.toPhone,
           type: "text",
-          text: { body: text.slice(0, 4000) },
+          text: { body: options.text.slice(0, 4000) },
         }),
       },
     );
@@ -1055,6 +1065,8 @@ async function processGuestMessage(options: {
     slug: string;
     email: string;
     welcomeMessage: string;
+    whatsappAccessToken?: string | null;
+    whatsappPhoneNumberId?: string | null;
   };
   message: string;
   source: "widget" | "whatsapp";
@@ -1162,7 +1174,12 @@ async function processGuestMessage(options: {
 
     const delivery =
       options.source === "whatsapp" && normalizedVisitorPhone
-        ? await sendWhatsAppMessage(normalizedVisitorPhone, assistantMessageContent)
+        ? await sendWhatsAppMessage({
+            toPhone: normalizedVisitorPhone,
+            text: assistantMessageContent,
+            accessToken: business.whatsappAccessToken,
+            phoneNumberId: business.whatsappPhoneNumberId,
+          })
         : null;
 
     await prisma.message.create({
@@ -1534,7 +1551,19 @@ app.post(
 
     const user = await prisma.user.findUnique({
       where: { email },
-      include: { business: true },
+      include: {
+        business: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            email: true,
+            websiteUrl: true,
+            brandColor: true,
+            welcomeMessage: true,
+          },
+        },
+      },
     });
 
     if (!user) {
@@ -1640,7 +1669,19 @@ app.post(
 
     const user = await prisma.user.findUnique({
       where: { email: payload.email.toLowerCase() },
-      include: { business: true },
+      include: {
+        business: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            email: true,
+            websiteUrl: true,
+            brandColor: true,
+            welcomeMessage: true,
+          },
+        },
+      },
     });
 
     if (!user) {
@@ -1688,7 +1729,19 @@ app.get(
     const auth = req.auth!;
     const user = await prisma.user.findUnique({
       where: { id: auth.userId },
-      include: { business: true },
+      include: {
+        business: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            email: true,
+            websiteUrl: true,
+            brandColor: true,
+            welcomeMessage: true,
+          },
+        },
+      },
     });
 
     if (!user) {
@@ -2132,8 +2185,21 @@ app.get(
     }
 
     res.json({
-      business,
+      business: {
+        id: business.id,
+        name: business.name,
+        slug: business.slug,
+        email: business.email,
+        websiteUrl: business.websiteUrl,
+        brandColor: business.brandColor,
+        welcomeMessage: business.welcomeMessage,
+      },
       widgetSnippet: formatWidgetSnippet(business.slug, widgetUrls),
+      whatsappWebhookUrl: `${widgetUrls.apiBaseUrl}/api/whatsapp/${business.slug}/webhook`,
+      whatsappConfigured: Boolean(
+        (business as Record<string, unknown>).whatsappAccessToken &&
+          (business as Record<string, unknown>).whatsappPhoneNumberId,
+      ),
     });
   }),
 );
@@ -2144,6 +2210,11 @@ app.put(
   asyncHandler(async (req, res) => {
     const { businessId } = req.auth!;
     const payload = settingsSchema.parse(req.body);
+    const whatsappUpdateData = {
+      whatsappVerifyToken: payload.whatsappVerifyToken?.trim() || null,
+      whatsappAccessToken: payload.whatsappAccessToken?.trim() || null,
+      whatsappPhoneNumberId: payload.whatsappPhoneNumberId?.trim() || null,
+    };
 
     const business = await prisma.business.update({
       where: { id: businessId },
@@ -2151,10 +2222,27 @@ app.put(
         brandColor: payload.brandColor,
         welcomeMessage: payload.welcomeMessage,
         websiteUrl: payload.websiteUrl || null,
+        ...whatsappUpdateData,
       },
     });
 
-    res.json({ business });
+    const whatsappConfigured = Boolean(
+      payload.whatsappAccessToken?.trim() && payload.whatsappPhoneNumberId?.trim(),
+    );
+
+    res.json({
+      business: {
+        id: business.id,
+        name: business.name,
+        slug: business.slug,
+        email: business.email,
+        websiteUrl: business.websiteUrl,
+        brandColor: business.brandColor,
+        welcomeMessage: business.welcomeMessage,
+      },
+      whatsappConfigured,
+      whatsappWebhookPath: `/api/whatsapp/${business.slug}/webhook`,
+    });
   }),
 );
 
@@ -2806,96 +2894,15 @@ app.get(
       res.status(400).json({ error: "Invalid webhook mode." });
       return;
     }
-    if (!env.WHATSAPP_VERIFY_TOKEN || verifyToken !== env.WHATSAPP_VERIFY_TOKEN) {
-      res.status(403).json({ error: "Invalid WhatsApp verify token." });
-      return;
-    }
-
-    res.status(200).send(challenge);
-  }),
-);
-
-app.post(
-  "/api/whatsapp/:slug/webhook",
-  asyncHandler(async (req, res) => {
-    const slug = firstParam(req.params.slug);
-    if (!slug) {
-      res.status(400).json({ error: "Business slug is required." });
-      return;
-    }
-
-    const business = await prisma.business.findUnique({
-      where: { slug },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        email: true,
-        welcomeMessage: true,
-      },
-    });
+    const business = await prisma.business.findUnique({ where: { slug } });
     if (!business) {
       res.status(404).json({ error: "Business not found." });
       return;
     }
 
-    const entryList = Array.isArray((req.body as { entry?: unknown[] }).entry)
-      ? ((req.body as { entry: unknown[] }).entry as unknown[])
-      : [];
-
-    for (const entry of entryList) {
-      const changes = Array.isArray((entry as { changes?: unknown[] }).changes)
-        ? ((entry as { changes: unknown[] }).changes as unknown[])
-        : [];
-
-      for (const change of changes) {
-        const value = (change as { value?: Record<string, unknown> }).value ?? {};
-        const contacts = Array.isArray(value.contacts) ? (value.contacts as Array<Record<string, unknown>>) : [];
-        const messages = Array.isArray(value.messages) ? (value.messages as Array<Record<string, unknown>>) : [];
-
-        for (const incoming of messages) {
-          const fromPhone = normalizePhoneNumber(String(incoming.from ?? ""));
-          const textBody = String(
-            ((incoming.text as Record<string, unknown> | undefined)?.body as string | undefined) ?? "",
-          ).trim();
-          if (!fromPhone || !textBody) continue;
-
-          const contact = contacts.find((item) => String(item.wa_id ?? "") === fromPhone);
-          const profile = (contact?.profile as Record<string, unknown> | undefined) ?? {};
-          const visitorName = String(profile.name ?? "").trim() || undefined;
-
-          await processGuestMessage({
-            business,
-            message: textBody,
-            source: "whatsapp",
-            visitorName,
-            visitorPhone: fromPhone,
-          });
-        }
-      }
-    }
-
-    res.status(200).json({ received: true });
-  }),
-);
-
-app.get(
-  "/api/whatsapp/:slug/webhook",
-  asyncHandler(async (req, res) => {
-    const slug = firstParam(req.params.slug);
-    const mode = String(req.query["hub.mode"] ?? "");
-    const verifyToken = String(req.query["hub.verify_token"] ?? "");
-    const challenge = String(req.query["hub.challenge"] ?? "");
-
-    if (!slug) {
-      res.status(400).json({ error: "Business slug is required." });
-      return;
-    }
-    if (mode !== "subscribe") {
-      res.status(400).json({ error: "Invalid webhook mode." });
-      return;
-    }
-    if (!env.WHATSAPP_VERIFY_TOKEN || verifyToken !== env.WHATSAPP_VERIFY_TOKEN) {
+    const expectedVerifyToken =
+      String((business as Record<string, unknown>).whatsappVerifyToken ?? "") || env.WHATSAPP_VERIFY_TOKEN;
+    if (!expectedVerifyToken || verifyToken !== expectedVerifyToken) {
       res.status(403).json({ error: "Invalid WhatsApp verify token." });
       return;
     }

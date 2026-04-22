@@ -26,6 +26,14 @@ export function useDashboardOps() {
   const conversations = ref<Conversation[]>([]);
   const bookings = ref<Booking[]>([]);
   const widgetSnippet = ref("");
+  const whatsappWebhookUrl = ref("");
+  const whatsappConfigured = ref(false);
+  const savingWhatsAppConfig = ref(false);
+  const whatsappForm = reactive({
+    verifyToken: "",
+    accessToken: "",
+    phoneNumberId: "",
+  });
 
   const knowledgeForm = reactive({
     title: "",
@@ -146,6 +154,8 @@ export function useDashboardOps() {
       conversations.value = conversationResponse.data.conversations;
       bookings.value = bookingResponse.data.bookings;
       widgetSnippet.value = widgetResponse.data.widgetSnippet;
+      whatsappWebhookUrl.value = widgetResponse.data.whatsappWebhookUrl ?? "";
+      whatsappConfigured.value = Boolean(widgetResponse.data.whatsappConfigured);
     } catch (loadError) {
       error.value =
         loadError instanceof Error ? loadError.message : "Unable to load your hospitality dashboard.";
@@ -282,6 +292,39 @@ export function useDashboardOps() {
     }
   }
 
+  async function saveWhatsAppConfig() {
+    if (!business.value) {
+      error.value = "Business profile is not loaded yet.";
+      return;
+    }
+    if (!whatsappForm.verifyToken.trim() || !whatsappForm.accessToken.trim() || !whatsappForm.phoneNumberId.trim()) {
+      error.value = "Provide verify token, access token, and phone number ID.";
+      return;
+    }
+
+    savingWhatsAppConfig.value = true;
+    error.value = "";
+    success.value = "";
+
+    try {
+      const response = await adminApi.updateSettings({
+        brandColor: business.value.brandColor,
+        welcomeMessage: business.value.welcomeMessage,
+        websiteUrl: business.value.websiteUrl ?? "",
+        whatsappVerifyToken: whatsappForm.verifyToken.trim(),
+        whatsappAccessToken: whatsappForm.accessToken.trim(),
+        whatsappPhoneNumberId: whatsappForm.phoneNumberId.trim(),
+      });
+      whatsappConfigured.value = Boolean(response.data.whatsappConfigured);
+      success.value = "WhatsApp is now configured for this business.";
+      await loadData();
+    } catch (saveError) {
+      error.value = saveError instanceof Error ? saveError.message : "Unable to save WhatsApp settings.";
+    } finally {
+      savingWhatsAppConfig.value = false;
+    }
+  }
+
   async function initialize(router: Router) {
     await auth.hydrate();
     if (!auth.isAuthenticated) {
@@ -310,6 +353,10 @@ export function useDashboardOps() {
     conversations,
     bookings,
     widgetSnippet,
+    whatsappWebhookUrl,
+    whatsappConfigured,
+    whatsappForm,
+    savingWhatsAppConfig,
     knowledgeForm,
     replyDrafts,
     business,
@@ -331,6 +378,7 @@ export function useDashboardOps() {
     toggleTakeover,
     sendReply,
     copySnippet,
+    saveWhatsAppConfig,
     initialize,
     logout,
   });

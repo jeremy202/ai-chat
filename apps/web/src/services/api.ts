@@ -15,7 +15,7 @@ function resolveApiBaseUrl() {
   }
 
   if (import.meta.env.DEV) {
-    return "http://localhost:8080";
+    return "http://localhost:4000";
   }
 
   return "/api";
@@ -262,14 +262,26 @@ export const adminApi = {
     return client.get<{ bookings: Booking[] }>("/api/admin/bookings");
   },
   getWidgetSettings() {
-    return client.get<{ business: Business; widgetSnippet: string }>("/api/admin/widget");
+    return client.get<{
+      business: Business;
+      widgetSnippet: string;
+      whatsappWebhookUrl: string;
+      whatsappConfigured: boolean;
+    }>("/api/admin/widget");
   },
   updateSettings(payload: {
     brandColor: string;
     welcomeMessage: string;
     websiteUrl?: string;
+    whatsappVerifyToken?: string;
+    whatsappAccessToken?: string;
+    whatsappPhoneNumberId?: string;
   }) {
-    return client.put<{ business: Business }>("/api/admin/settings", payload);
+    return client.put<{
+      business: Business;
+      whatsappConfigured?: boolean;
+      whatsappWebhookPath?: string;
+    }>("/api/admin/settings", payload);
   },
   getShifts() {
     return client.get<{ shifts: ShiftEntry[] }>("/api/admin/shifts");

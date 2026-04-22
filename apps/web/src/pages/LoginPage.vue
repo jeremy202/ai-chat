@@ -19,6 +19,7 @@ const form = reactive({
 
 const isSubmitting = ref(false);
 const error = ref("");
+type FirebaseAuthError = Error & { code?: string };
 
 async function handleSubmit() {
   isSubmitting.value = true;
@@ -31,7 +32,12 @@ async function handleSubmit() {
     auth.setSession(data);
     await router.push("/dashboard");
   } catch (submissionError) {
-    error.value = "Unable to log in with those credentials.";
+    const authError = submissionError as FirebaseAuthError;
+    if (authError.code === "auth/network-request-failed") {
+      error.value = "Cannot reach Firebase Auth. Check internet, VPN/firewall, and try again.";
+    } else {
+      error.value = "Unable to log in with those credentials.";
+    }
     console.error(submissionError);
   } finally {
     isSubmitting.value = false;

@@ -68,6 +68,9 @@ model Business {
   slug             String           @unique
   email            String
   websiteUrl       String?
+  whatsappVerifyToken String?
+  whatsappAccessToken String?
+  whatsappPhoneNumberId String?
   marketSegment    String           @default("hospitality")
   brandColor       String           @default("#0F766E")
   timezone         String           @default("America/Toronto")
